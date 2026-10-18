@@ -19,7 +19,7 @@ const customerInputSchema = z.object({
   expectedOrgId: z
     .string()
     .trim()
-    .regex(/^[a-zA-Z0-9_-]{2,128}$/),
+    .regex(/^[a-zA-Z0-9_-]{1,128}$/),
 })
 const customerSchema = customerInputSchema.extend({
   id: z.string().uuid(),

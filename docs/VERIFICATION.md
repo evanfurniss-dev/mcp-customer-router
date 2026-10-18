@@ -10,7 +10,7 @@ The build must save one authorization per customer, share it between Claude Code
 
 | Check                  | Result                                                                                                                                                                                                                                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Automated suite        | 621 tests passed across 25 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
+| Automated suite        | 623 tests passed across 25 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
 | Static checks          | Root formatting, lint, TypeScript and Knip passed. Frontend strict TypeScript passed.                                                                                                                                                                                                                  |
 | Build                  | Bridge and dashboard production builds passed.                                                                                                                                                                                                                                                         |
 | Shared authorization   | Two MCP clients used the same temporary customer store, with one refresh and independent protocol handshakes.                                                                                                                                                                                          |
@@ -55,6 +55,12 @@ The first user Connect attempt waited for authorization without displaying a bro
 Connect now publishes the prepared sign-in URL through a dedicated child IPC channel after authorization checks. The dashboard shows **Open Glide sign-in** while the job is active. The URL stays in memory, is removed on completion, cancellation or generation change, and is hidden when dashboard refresh fails. Job text says that sign-in is being prepared until the URL is ready. The running router was restarted outside the process sandbox; a fresh live Glide attempt returned a validated sign-in link.
 
 A real child fixture completed authorization through the IPC link with browser launch blocked. Additional tests cover wrong endpoints/callbacks, stale generations, late IPC after completion, and non-interactive check/serve modes. Browser tests verified the manual link at desktop and 320px widths, including reload, completion, failure and lost dashboard access. Real consent and organization selection remain user actions.
+
+## Single-character organization IDs
+
+The original validators required at least two characters in both saved expectations and returned citation paths. They now accept one through 128 allowed characters, with IDs kept as strings. Regression tests save and reload fixture organization `1`, verify its citation and real SDK connection, reject empty IDs, and retain mismatch blocking between separate customers.
+
+An existing live authorization passed the identity check after the saved expectation was corrected to the verified organization. The check reused that authorization without a new sign-in. The local registry was backed up before the correction; credential files were preserved. This verifies one live connection. Multi-organization client transfer and long-running refresh still require the acceptance checks below.
 
 ## Live acceptance still required
 

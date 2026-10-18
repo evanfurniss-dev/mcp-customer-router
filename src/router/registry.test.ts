@@ -16,6 +16,14 @@ afterEach(async () => {
 })
 
 describe('customer registry', () => {
+  it('saves and reloads organization 1 as a string while rejecting blank IDs', async () => {
+    const store = await fixture()
+    const item = await store.add(customer('1'))
+    expect((await store.customer(item.id)).expectedOrgId).toBe('1')
+    await expect(store.add(customer('1'))).rejects.toThrow('already')
+    await expect(store.add(customer(''))).rejects.toThrow('valid organization')
+  })
+
   it('keeps same-URL customer stores and callback ports separate with private permissions', async () => {
     const store = await fixture()
     const [a, b] = await Promise.all([store.add(customer('org-a')), store.add(customer('org-b'))])

@@ -48,6 +48,12 @@ describe('authenticated organization identity', () => {
     expect(verifyIdentity(identity(), endpoint, 'customer-a')).toBe('customer-a')
   })
 
+  it('accepts the one-character organization ID 1 and still blocks a different expected ID', () => {
+    expect(verifyIdentity(identity('1'), endpoint, '1')).toBe('1')
+    expect(() => verifyIdentity(identity('1'), endpoint, '2')).toThrow('different organization')
+    expect(() => verifyIdentity(identity('1'), endpoint, '')).toThrow('valid organization identity')
+  })
+
   it('blocks another organization and reports only its ID', () => {
     let failure: unknown
     try {
@@ -597,12 +603,12 @@ describe('real SDK clients against a local OAuth fixture', () => {
 
   it('keeps the same server URL isolated across two customer stores', async () => {
     const remote = await fixture()
-    const [a, b] = await Promise.all([remote.spec('customer-a'), remote.spec('customer-b')])
+    const [a, b] = await Promise.all([remote.spec('1'), remote.spec('customer-b')])
     const [first, second] = await Promise.all([remote.client(a), remote.client(b)])
-    expect(await first.client.callTool({ name: 'echo', arguments: {} })).toMatchObject({ content: [{ text: 'customer-a' }] })
+    expect(await first.client.callTool({ name: 'echo', arguments: {} })).toMatchObject({ content: [{ text: '1' }] })
     expect(await second.client.callTool({ name: 'echo', arguments: {} })).toMatchObject({ content: [{ text: 'customer-b' }] })
     const wrong = await checkChild({ ...a, customer: { ...a.customer, expectedOrgId: 'customer-b' } })
-    expect(JSON.parse(wrong.output)).toMatchObject({ state: 'mismatch', observedOrgId: 'customer-a' })
+    expect(JSON.parse(wrong.output)).toMatchObject({ state: 'mismatch', observedOrgId: '1' })
     expect(wrong.stderr).toBe('')
   }, 25000)
 

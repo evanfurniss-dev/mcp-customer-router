@@ -44,7 +44,7 @@ export function connectionFailure(error: unknown): ConnectionCheck {
 }
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value)
-const orgIdPattern = /^[a-zA-Z0-9_-]{2,128}$/
+const orgIdPattern = /^[a-zA-Z0-9_-]{1,128}$/
 
 function dashboardOrigin(serverUrl: string): string {
   const endpoint = new URL(serverUrl)
@@ -71,7 +71,7 @@ export function verifyIdentity(result: unknown, serverUrl: string, expectedOrgId
   } catch {
     throw missing()
   }
-  const match = /^\/o\/([a-zA-Z0-9_-]{2,128})\/projects$/.exec(citation.pathname)
+  const match = /^\/o\/([a-zA-Z0-9_-]{1,128})\/projects$/.exec(citation.pathname)
   if (citation.origin !== origin || citation.username || citation.password || citation.search || citation.hash || !match) throw missing()
   const observed = match[1]
   if ('orgId' in data && data.orgId !== observed) throw missing()
