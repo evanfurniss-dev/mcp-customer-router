@@ -16,5 +16,5 @@
     "unicorn/prefer-add-event-listener": "off",
     "vitest/require-mock-type-parameters": "off"
   },
-  "ignorePatterns": ["dist", "node_modules", "test/node_modules"]
+  "ignorePatterns": ["dist", "node_modules", "test/node_modules", ".pnpm-store", "web"]
 }

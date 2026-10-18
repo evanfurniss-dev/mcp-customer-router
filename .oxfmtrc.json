@@ -5,5 +5,5 @@
   "semi": false,
   "useTabs": false,
   "sortPackageJson": false,
-  "ignorePatterns": ["pnpm-lock.yaml", "README.md"]
+  "ignorePatterns": ["pnpm-lock.yaml", "README.md", ".pnpm-store", "web", "docs/UPSTREAM-README.md"]
 }

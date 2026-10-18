@@ -3,3 +3,12 @@ node_modules
 dist
 CLAUDE.local.md
 .envrc
+.pnpm-store/
+web/dist/
+web/node_modules/
+web/.pnpm-store/
+playwright-report/
+test-results/
+.DS_Store
+*.log
+.mcp-customer-router/

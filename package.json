@@ -1,7 +1,7 @@
 {
-  "name": "mcp-remote",
-  "version": "0.1.38",
-  "description": "Remote proxy for Model Context Protocol, allowing local-only clients to connect to remote servers using oAuth",
+  "name": "@evanfurniss-dev/mcp-customer-router",
+  "version": "0.1.0",
+  "description": "Local customer-bound Glide MCP connections shared by Claude Code and Codex",
   "keywords": [
     "mcp",
     "stdio",
@@ -11,7 +11,7 @@
   ],
   "author": "Glen Maddern <glen@glenmaddern.com>",
   "license": "MIT",
-  "repository": "https://github.com/punkpeye/mcp-remote",
+  "repository": "https://github.com/evanfurniss-dev/mcp-customer-router",
   "type": "module",
   "files": [
     "dist",
@@ -20,59 +20,56 @@
   ],
   "bin": {
     "mcp-remote": "dist/proxy.js",
-    "mcp-remote-client": "dist/client.js"
+    "mcp-remote-client": "dist/client.js",
+    "mcp-customer-router": "dist/router-cli.js"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm build:bridge && pnpm --dir web build",
     "build:watch": "tsup --watch",
     "dev:client": "tsx src/client.ts",
     "dev:proxy": "tsx src/proxy.ts",
     "format": "oxfmt .",
     "knip": "knip",
     "lint": "oxfmt --check . && oxlint --deny-warnings && tsc && tsc -p test --noEmit",
-    "prepack": "tsup",
+    "prepack": "pnpm build",
     "prepare": "husky",
     "test": "vitest run",
-    "test:watch": "vitest"
-  },
-  "release": {
-    "branches": [
-      "main"
-    ],
-    "plugins": [
-      "@semantic-release/commit-analyzer",
-      "@semantic-release/release-notes-generator",
-      "@semantic-release/npm",
-      "@semantic-release/github"
-    ]
+    "test:watch": "vitest",
+    "build:bridge": "tsup",
+    "start": "node dist/router-cli.js dashboard --open",
+    "check:router": "vitest run src/router"
   },
   "dependencies": {
-    "express": "^4.21.2",
+    "express": "^4.22.3",
     "open": "^10.1.0",
+    "smol-toml": "1.9.1",
     "strict-url-sanitise": "^0.0.1",
-    "undici": "^7.12.0"
+    "undici": "^7.30.1"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "^2.0.0",
-    "@modelcontextprotocol/core": "^2.0.0",
-    "@modelcontextprotocol/server": "^2.0.0",
+    "@modelcontextprotocol/client": "^2.3.1",
+    "@modelcontextprotocol/core": "^2.3.1",
+    "@modelcontextprotocol/server": "^2.3.1",
     "@types/express": "^5.0.0",
     "@types/node": "^22.13.10",
     "husky": "9.1.7",
     "knip": "6.32.3",
-    "oxfmt": "0.65.0",
+    "oxfmt": "0.73.0",
     "oxlint": "1.80.0",
-    "semantic-release": "^25.0.2",
-    "tsup": "^8.4.0",
+    "postcss": "8.5.31",
+    "tsup": "8.5.1",
     "tsx": "^4.19.3",
     "typescript": "^5.8.2",
-    "vitest": "^3.2.3",
+    "vite": "6.4.4",
+    "vitest": "4.1.12",
     "zod": "^4.2.0"
   },
   "tsup": {
     "entry": [
       "src/client.ts",
-      "src/proxy.ts"
+      "src/proxy.ts",
+      "src/router-cli.ts",
+      "src/router-connection.ts"
     ],
     "format": [
       "esm"
@@ -82,5 +79,9 @@
     "outDir": "dist",
     "external": []
   },
-  "packageManager": "pnpm@10.11.0+sha512.6540583f41cc5f628eb3d9773ecee802f4f9ef9923cc45b69890fb47991d4b092964694ec3a4f738a420c918a333062c8b925d312f42e4f0c263eb603551f977"
+  "packageManager": "pnpm@10.11.0+sha512.6540583f41cc5f628eb3d9773ecee802f4f9ef9923cc45b69890fb47991d4b092964694ec3a4f738a420c918a333062c8b925d312f42e4f0c263eb603551f977",
+  "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  }
 }
