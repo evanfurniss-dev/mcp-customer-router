@@ -18,6 +18,8 @@ import {
   type ConnectionSpec,
 } from './connection'
 import { getServerUrlHash } from '../lib/utils'
+import { NodeOAuthClientProvider } from '../lib/node-oauth-client-provider'
+import * as browser from '../lib/open-browser'
 
 vi.mock('open', () => ({ default: vi.fn() }))
 
@@ -343,6 +345,14 @@ async function fixture() {
   }
 }
 
+async function freeCallbackPort() {
+  const server = http.createServer()
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = (server.address() as { port: number }).port
+  await new Promise<void>((resolve) => server.close(() => resolve()))
+  return port
+}
+
 describe('real SDK clients against a local OAuth fixture', () => {
   it('completes explicit fresh sign-in on the assigned callback port using only the selected customer store', async () => {
     const remote = await fixture()
@@ -383,6 +393,153 @@ describe('real SDK clients against a local OAuth fixture', () => {
       else process.env.MCP_REMOTE_CONFIG_DIR = prior
     }
   }, 15000)
+
+  it('provides a usable sign-in link before an unsuccessful browser launch', async () => {
+    const remote = await fixture()
+    const configuration = await remote.spec('customer-a')
+    configuration.customer.callbackPort = await freeCallbackPort()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const launch = vi.spyOn(browser, 'openBrowser').mockResolvedValue(false)
+    const browserRequests: Promise<unknown>[] = []
+    const onAuthorizationUrl = vi.fn((url: string) => {
+      expect(launch).not.toHaveBeenCalled()
+      browserRequests.push(fetch(url).then((response) => response.text()))
+    })
+    const prior = process.env.MCP_REMOTE_CONFIG_DIR
+    try {
+      const connection = await runCustomerConnection(configuration, 'connect', undefined, onAuthorizationUrl)
+      expect(connection.check).toMatchObject({ state: 'verified', observedOrgId: 'customer-a' })
+      expect(onAuthorizationUrl).toHaveBeenCalledTimes(1)
+      expect(launch).toHaveBeenCalledWith(onAuthorizationUrl.mock.calls[0][0])
+      expect(remote.redirectUris).toEqual([`http://localhost:${configuration.customer.callbackPort}/oauth/callback`])
+      await Promise.all(browserRequests)
+    } finally {
+      if (prior === undefined) delete process.env.MCP_REMOTE_CONFIG_DIR
+      else process.env.MCP_REMOTE_CONFIG_DIR = prior
+    }
+  }, 15000)
+
+  it('delivers the child IPC link when its browser cannot start and keeps stdout limited to the final check', async () => {
+    const remote = await fixture()
+    const configuration = await remote.spec('customer-a')
+    configuration.customer.callbackPort = await freeCallbackPort()
+    const loader = path.join(configuration.authDir, 'blocked-browser-loader.mjs')
+    const bootstrap = path.join(configuration.authDir, 'register-loader.mjs')
+    await fs.writeFile(
+      loader,
+      `export function resolve(name, context, next) {
+      if (name === 'open') return {
+        url: 'data:text/javascript,export default async function() { throw new Error("fixture browser unavailable") }',
+        shortCircuit: true
+      }
+      return next(name, context)
+    }`,
+    )
+    await fs.writeFile(bootstrap, `import { register } from 'node:module'; register('./blocked-browser-loader.mjs', import.meta.url)`)
+    const messages: unknown[] = []
+    const browserRequests: Promise<unknown>[] = []
+    const result = await new Promise<{ output: string; stderr: string; code: number | null }>((resolve, reject) => {
+      const child = spawn(process.execPath, ['--import', 'tsx', '--import', bootstrap, entry, '--mode', 'connect'], {
+        env: childEnv(configuration),
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      })
+      let output = ''
+      let stderr = ''
+      const deadline = setTimeout(() => {
+        child.kill()
+        reject(new Error('The child sign-in fixture timed out.'))
+      }, 12000)
+      child.stdout?.on('data', (part) => {
+        output += part
+      })
+      child.stderr?.on('data', (part) => {
+        stderr += part
+      })
+      child.on('message', (message) => {
+        messages.push(message)
+        const event = message as { type?: string; url?: string }
+        if (event.type === 'authorization_ready' && typeof event.url === 'string') {
+          browserRequests.push(fetch(event.url).then((response) => response.text()))
+        }
+      })
+      child.once('error', reject)
+      child.once('close', (code) => {
+        clearTimeout(deadline)
+        resolve({ output, stderr, code })
+      })
+      cleanups.push(async () => {
+        clearTimeout(deadline)
+        child.kill()
+      })
+    })
+    await Promise.all(browserRequests)
+    expect(messages).toEqual([{ type: 'authorization_ready', url: expect.stringContaining(`${remote.origin()}/authorize?`) }])
+    expect(result.code).toBe(0)
+    expect(result.output.trim().split('\n')).toHaveLength(1)
+    expect(JSON.parse(result.output)).toMatchObject({ state: 'verified', observedOrgId: 'customer-a' })
+    expect(result.output).not.toContain('authorization_ready')
+    expect(result.stderr).toBe('')
+    expect(remote.redirectUris).toEqual([`http://localhost:${configuration.customer.callbackPort}/oauth/callback`])
+  }, 15000)
+
+  it.each(['endpoint', 'redirect', 'duplicate-redirect', 'generation'])(
+    'does not publish or open a sign-in link after its %s changes',
+    async (change) => {
+      const remote = await fixture()
+      const configuration = await remote.spec('customer-a')
+      configuration.customer.callbackPort = await freeCallbackPort()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const launch = vi.spyOn(browser, 'openBrowser').mockResolvedValue(false)
+      const onAuthorizationUrl = vi.fn()
+      const redirect = NodeOAuthClientProvider.prototype.redirectToAuthorization
+      vi.spyOn(NodeOAuthClientProvider.prototype, 'redirectToAuthorization').mockImplementation(async function (
+        this: NodeOAuthClientProvider,
+        url: URL,
+      ) {
+        if (change === 'endpoint') url.pathname = '/untrusted'
+        else if (change === 'redirect') url.searchParams.set('redirect_uri', 'https://untrusted.example/callback')
+        else if (change === 'duplicate-redirect') url.searchParams.append('redirect_uri', 'https://untrusted.example/callback')
+        else await fs.writeFile(path.join(configuration.authDir, 'router-generation'), `${randomUUID()}\n`)
+        await redirect.call(this, url)
+      })
+      const prior = process.env.MCP_REMOTE_CONFIG_DIR
+      try {
+        await expect(runCustomerConnection(configuration, 'connect', undefined, onAuthorizationUrl)).rejects.toThrow('sign-in')
+        expect(onAuthorizationUrl).not.toHaveBeenCalled()
+        expect(launch).not.toHaveBeenCalled()
+        expect(remote.redirectUris).toHaveLength(0)
+      } finally {
+        if (prior === undefined) delete process.env.MCP_REMOTE_CONFIG_DIR
+        else process.env.MCP_REMOTE_CONFIG_DIR = prior
+      }
+    },
+    15000,
+  )
+
+  it.each(['check', 'serve'] as const)(
+    'never publishes a sign-in link during %s when a grant is revoked',
+    async (mode) => {
+      const remote = await fixture()
+      const configuration = await remote.spec('customer-a')
+      remote.revoke()
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      const launch = vi.spyOn(browser, 'openBrowser').mockResolvedValue(false)
+      const onAuthorizationUrl = vi.fn()
+      const prior = process.env.MCP_REMOTE_CONFIG_DIR
+      try {
+        await expect(runCustomerConnection(configuration, mode, undefined, onAuthorizationUrl)).rejects.toThrow(
+          'Sign in from the customer dashboard',
+        )
+        expect(onAuthorizationUrl).not.toHaveBeenCalled()
+        expect(launch).not.toHaveBeenCalled()
+        expect(remote.redirectUris).toHaveLength(0)
+      } finally {
+        if (prior === undefined) delete process.env.MCP_REMOTE_CONFIG_DIR
+        else process.env.MCP_REMOTE_CONFIG_DIR = prior
+      }
+    },
+    15000,
+  )
 
   it('shares one refreshed customer grant between two clients and preserves each downstream handshake', async () => {
     const remote = await fixture()

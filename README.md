@@ -15,12 +15,12 @@ pnpm build
 pnpm start
 ```
 
-On a Mac with dependencies already installed and the build complete, open **Start Customer MCP Router.command** in this folder. The dashboard runs at `http://127.0.0.1:4773`. Keep its terminal open while managing connections. Existing MCP client processes do not depend on the dashboard remaining open.
+On a Mac with dependencies already installed and the build complete, open **Start Customer MCP Router.command** in this folder. The dashboard runs at `http://127.0.0.1:4773`. Keep its terminal open while managing connections. Start it from this launcher or your own terminal so macOS can open the browser; a coding-agent process sandbox can block that action. Existing MCP client processes do not depend on the dashboard remaining open.
 
 ## Connect a customer
 
 1. Select **Add customer**. Enter its name and business label. Copy its organization ID from its Glide URL, such as the ID after `/o/` in `https://os.glideapps.dev/o/ORG_ID/projects`.
-2. Open the customer and select **Connect**. Finish Glide sign-in and choose that organization. The router reads `project_list` and checks its server-owned organization citation before showing **Verified**.
+2. Open the customer and select **Connect**. If a browser does not open, select **Open Glide sign-in** in the active job. Finish Glide sign-in and choose that organization. The router reads `project_list` and checks its server-owned organization citation before showing **Verified**.
 3. Enter the full path to the customer's local project. Preview the generated Claude and Codex settings. Review any warnings about existing Glide connections, then apply.
 4. Open a fresh Claude Code or Codex session in that project. Codex requires the project to be trusted. Claude may ask to approve the project's MCP entry. These are local project approvals; they do not repeat Glide sign-in. In T3, open that project and start a fresh provider session.
 
@@ -35,7 +35,7 @@ Project settings use absolute paths to this checkout and Node. If you move the c
 - A `customer-glide` entry in `.mcp.json` and `.codex/config.toml` for each project you explicitly bind. Other settings are preserved. Existing files receive private backups.
 - One bridge process per active client. Claude and Codex read the same customer's saved credential store while keeping independent protocol connections.
 
-The browser receives generated snippets only. Existing configuration content and OAuth credentials stay out of API responses. The local dashboard checks its host, browser origin, and session token. It binds only to `127.0.0.1`.
+Configuration previews contain only the generated snippets. An active sign-in link stays in job memory until the job ends. Existing configuration content and OAuth credentials stay out of API responses. The local dashboard checks its host, browser origin, and session token. It binds only to `127.0.0.1`.
 
 The MVP supports `https://mcp.glideapps.dev/mcp`. Loopback HTTP servers exist for automated tests. It blocks tools if organization identity is absent or differs from the saved expectation. It also stops older sessions when a new customer sign-in begins. A timeout or cancellation does not prove that a remote write was rolled back; check the result before retrying it.
 

@@ -151,16 +151,16 @@ function CustomerDetail({ customer, bindings, jobs, headingRef, unavailable, ref
 }) {
   const [starting, setStarting] = useState<'connect' | 'check' | null>(null)
   const [error, setError] = useState('')
-  const [authHint, setAuthHint] = useState(false)
   const [removing, setRemoving] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const latestJob = [...jobs].sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0]
-  const running = jobs.some(job => job.state === 'running') || starting !== null
+  const runningJob = jobs.find(job => job.state === 'running')
+  const running = !!runningJob || starting !== null
   const verified = customer.lastCheck?.state === 'verified'
   async function run(action: 'connect' | 'check') {
-    setStarting(action); setError(''); setAuthHint(action === 'connect')
+    setStarting(action); setError('')
     try { const result = await post<{ jobId: string }>(`/api/customers/${encodeURIComponent(customer.id)}/${action}`); await jobStarted(result.jobId) }
-    catch (e) { setError(errorMessage(e)); setAuthHint(false) } finally { setStarting(null) }
+    catch (e) { setError(errorMessage(e)) } finally { setStarting(null) }
   }
   async function remove() {
     setRemoving(true); setError('')
@@ -175,8 +175,9 @@ function CustomerDetail({ customer, bindings, jobs, headingRef, unavailable, ref
       <dl className="identity-grid"><div><dt>Expected organization</dt><dd className="mono">{customer.expectedOrgId}</dd></div><div><dt>Last returned organization</dt><dd className="mono">{customer.lastCheck?.observedOrgId || 'Not verified yet'}</dd></div><div><dt>MCP server</dt><dd className="mono">{customer.serverUrl}</dd></div><div><dt>Last identity check</dt><dd>{dateLabel(customer.lastCheck?.checkedAt)}</dd></div></dl>
       {customer.lastCheck?.message && <Notice tone={customer.lastCheck.state === 'verified' ? 'success' : customer.lastCheck.state === 'unverified' ? 'info' : 'error'}>{customer.lastCheck.message}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
-      {authHint && running && <Notice><strong>Finish the Glide sign-in in your browser.</strong><p>Choose this customer’s organization, grant access, then return here. The check will update when sign-in finishes.</p></Notice>}
-      {latestJob && <div className={`job-status ${latestJob.state === 'failed' ? 'job-failed' : ''}`} role="status"><span>{latestJob.state === 'running' ? <RefreshCw className="busy-icon" aria-hidden="true" /> : latestJob.state === 'failed' ? <CircleAlert aria-hidden="true" /> : <Check aria-hidden="true" />}</span><div><strong>{latestJob.state === 'running' ? 'Check in progress' : latestJob.state === 'failed' ? 'Connection job failed' : 'Connection job finished'}</strong><p>{latestJob.message}</p></div></div>}
+      {starting === 'connect' && !runningJob && <Notice>Preparing Glide sign-in…</Notice>}
+      {runningJob?.authorizationUrl && <Notice><strong>Continue in Glide</strong><p>Choose this customer’s Glide organization, then return here to finish the identity check.</p><Button variant="outline" render={<a href={runningJob.authorizationUrl} target="_blank" rel="noopener noreferrer" />}>Open Glide sign-in</Button></Notice>}
+      {latestJob && <div className={`job-status ${latestJob.state === 'failed' ? 'job-failed' : ''}`} role="status"><span>{latestJob.state === 'running' ? <RefreshCw className="busy-icon" aria-hidden="true" /> : latestJob.state === 'failed' ? <CircleAlert aria-hidden="true" /> : <Check aria-hidden="true" />}</span><div><strong>{latestJob.state === 'running' ? 'Connection in progress' : latestJob.state === 'failed' ? 'Connection job failed' : 'Connection job finished'}</strong><p>{latestJob.message}</p></div></div>}
       <div className="connection-actions"><Button onClick={() => void run('connect')} loading={starting === 'connect'} disabled={running || unavailable}><Link2 aria-hidden="true" />{verified ? 'Reconnect Glide' : 'Connect Glide'}</Button><Button variant="outline" onClick={() => void run('check')} loading={starting === 'check'} disabled={running || unavailable}><ShieldCheck aria-hidden="true" />Check identity</Button></div>
       <p className="field-hint connection-hint">A saved entry becomes verified only after Glide returns the expected organization ID.</p>
     </CardPanel></Card>

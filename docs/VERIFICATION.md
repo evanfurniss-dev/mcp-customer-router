@@ -10,7 +10,7 @@ The build must save one authorization per customer, share it between Claude Code
 
 | Check                  | Result                                                                                                                                                                                                                                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Automated suite        | 604 tests passed across 24 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
+| Automated suite        | 621 tests passed across 25 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
 | Static checks          | Root formatting, lint, TypeScript and Knip passed. Frontend strict TypeScript passed.                                                                                                                                                                                                                  |
 | Build                  | Bridge and dashboard production builds passed.                                                                                                                                                                                                                                                         |
 | Shared authorization   | Two MCP clients used the same temporary customer store, with one refresh and independent protocol handshakes.                                                                                                                                                                                          |
@@ -48,6 +48,14 @@ The remaining [esbuild advisory GHSA-g7r4-m6w7-qqqr](https://github.com/advisori
 
 Vitest 4.1.12 and oxfmt 0.73.0 passed the existing suite without product or test changes. Explicit Vite 6.4.4 and PostCSS 8.5.31 development dependencies resolve stale peer dependencies. Root and frontend frozen installs passed independently; no workspace file was added.
 
+## Browser handoff repair
+
+The first user Connect attempt waited for authorization without displaying a browser. The macOS opener failed inside the coding-agent process sandbox and succeeded outside it. Raw OAuth log suppression also hid the fallback URL from the dashboard.
+
+Connect now publishes the prepared sign-in URL through a dedicated child IPC channel after authorization checks. The dashboard shows **Open Glide sign-in** while the job is active. The URL stays in memory, is removed on completion, cancellation or generation change, and is hidden when dashboard refresh fails. Job text says that sign-in is being prepared until the URL is ready. The running router was restarted outside the process sandbox; a fresh live Glide attempt returned a validated sign-in link.
+
+A real child fixture completed authorization through the IPC link with browser launch blocked. Additional tests cover wrong endpoints/callbacks, stale generations, late IPC after completion, and non-interactive check/serve modes. Browser tests verified the manual link at desktop and 320px widths, including reload, completion, failure and lost dashboard access. Real consent and organization selection remain user actions.
+
 ## Live acceptance still required
 
 Use two test organizations before migrating customer work:
@@ -58,4 +66,4 @@ Use two test organizations before migrating customer work:
 4. Reconnect one customer while an older client is open. That client must fail until restarted. Confirm the other customer still works.
 5. Test refresh and revocation with the test organizations. Confirm that expired access either refreshes in the same customer store or stops with a clear sign-in requirement.
 
-No real Glide login, customer mutation, T3 model run, overnight refresh test or 30-organization load trial was performed. No existing Claude/Codex customer configuration was changed. This release has no scheduler or cloud execution. Local customer credentials use protected files; Mac Keychain storage is future work.
+The automated results use synthetic identities. T3 model execution, overnight refresh and 30-organization load trials remain unrun. No customer business data was changed. No existing Claude/Codex customer configuration was changed. This release has no scheduler or cloud execution. Local customer credentials use protected files; Mac Keychain storage is future work.

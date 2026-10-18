@@ -29,15 +29,48 @@ export function connectionEntry(): string {
   return fileURLToPath(new URL('./router-connection.js', import.meta.url))
 }
 
-type JobRunner = (customer: Customer, mode: 'connect' | 'check', authDir: string, signal: AbortSignal) => Promise<ConnectionCheck>
+type JobRunner = (
+  customer: Customer,
+  mode: 'connect' | 'check',
+  authDir: string,
+  signal: AbortSignal,
+  onAuthorizationReady?: (url: string) => Promise<void>,
+) => Promise<ConnectionCheck>
 
-export const runConnectionCheck: JobRunner = (customer, mode, authDir, signal) =>
+function authorizationUrl(customer: Customer, value: string): string | undefined {
+  if (value.length > 8192) return
+  try {
+    const url = new URL(value)
+    if (url.origin !== new URL(customer.serverUrl).origin || url.username || url.password || url.hash) return
+    const params = url.searchParams
+    for (const key of ['client_id', 'state', 'code_challenge', 'code_challenge_method', 'response_type', 'redirect_uri']) {
+      if (params.getAll(key).length !== 1 || !params.get(key)) return
+    }
+    if (
+      params.get('response_type') !== 'code' ||
+      params.get('code_challenge_method') !== 'S256' ||
+      params.get('redirect_uri') !== `http://localhost:${customer.callbackPort}/oauth/callback` ||
+      ['code', 'access_token', 'refresh_token', 'client_secret', 'code_verifier'].some((key) => params.has(key))
+    )
+      return
+    return url.href
+  } catch {
+    return
+  }
+}
+
+export const runConnectionCheck: JobRunner = (customer, mode, authDir, signal, onAuthorizationReady = async () => {}) =>
   new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [connectionEntry(), '--mode', mode], {
       env: connectionEnvironment(customer, authDir),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       signal,
     })
+    if (!child.stdout || !child.stderr) {
+      child.kill()
+      reject(new UserError('Could not open the connection check channels. Restart the router.'))
+      return
+    }
     let output = ''
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
@@ -46,6 +79,11 @@ export const runConnectionCheck: JobRunner = (customer, mode, authDir, signal) =
     })
     // Raw OAuth output can contain codes or token details. It never enters API responses or logs.
     child.stderr.resume()
+    child.on('message', (message) => {
+      if (mode !== 'connect' || !message || typeof message !== 'object' || !('type' in message) || message.type !== 'authorization_ready')
+        return
+      if ('url' in message && typeof message.url === 'string') void onAuthorizationReady(message.url).catch(() => {})
+    })
     child.once('error', () => reject(new UserError('Could not start the connection check. Build the router and try again.')))
     child.once('close', () => {
       try {
@@ -61,6 +99,7 @@ export const runConnectionCheck: JobRunner = (customer, mode, authDir, signal) =
 export class ConnectionJobs {
   private readonly entries = new Map<string, ConnectionJob>()
   private readonly controllers = new Map<string, AbortController>()
+  private readonly generations = new Map<string, string>()
 
   constructor(
     private readonly store: RegistryStore,
@@ -69,6 +108,17 @@ export class ConnectionJobs {
 
   list(): ConnectionJob[] {
     return [...this.entries.values()]
+  }
+
+  async snapshot(): Promise<ConnectionJob[]> {
+    await Promise.all(
+      this.list().map(async (job) => {
+        if (!job.authorizationUrl) return
+        const current = await this.store.generation(job.customerId).catch(() => undefined)
+        if (job.state !== 'running' || current !== this.generations.get(job.id)) delete job.authorizationUrl
+      }),
+    )
+    return this.list()
   }
 
   isRunning(customerId: string): boolean {
@@ -86,7 +136,7 @@ export class ConnectionJobs {
       id: randomUUID(),
       customerId,
       state: 'running',
-      message: mode === 'connect' ? 'Complete Glide sign-in in your browser, then return here.' : 'Checking the saved connection.',
+      message: mode === 'connect' ? 'Preparing Glide sign-in…' : 'Checking the saved connection.',
       startedAt: new Date().toISOString(),
     }
     const controller = new AbortController()
@@ -100,15 +150,36 @@ export class ConnectionJobs {
       this.controllers.delete(job.id)
       throw error
     }
+    this.generations.set(job.id, generation)
+    let acceptsAuthorization = true
+    controller.signal.addEventListener(
+      'abort',
+      () => {
+        acceptsAuthorization = false
+        delete job.authorizationUrl
+      },
+      { once: true },
+    )
     const timer = setTimeout(() => controller.abort(), mode === 'connect' ? 300000 : 45000)
     timer.unref()
-    void this.run(customer, mode, this.store.authDir(customerId), controller.signal)
+    void this.run(customer, mode, this.store.authDir(customerId), controller.signal, async (value) => {
+      if (mode !== 'connect' || !acceptsAuthorization || controller.signal.aborted || job.state !== 'running') return
+      const url = authorizationUrl(customer, value)
+      if (!url || (await this.store.generation(customerId)) !== generation) return
+      if (!acceptsAuthorization || controller.signal.aborted || job.state !== 'running') return
+      job.authorizationUrl = url
+      job.message = 'Glide sign-in is ready. Open the sign-in page, choose this customer’s organization, then return here.'
+    })
       .then(async (check) => {
+        acceptsAuthorization = false
+        delete job.authorizationUrl
         await this.store.recordCheck(customerId, check, generation)
         job.state = check.state === 'verified' ? 'complete' : 'failed'
         job.message = check.message
       })
       .catch(async () => {
+        acceptsAuthorization = false
+        delete job.authorizationUrl
         job.state = 'failed'
         job.message = controller.signal.aborted ? 'The check timed out or was stopped. Try again.' : 'Connection failed. Try Connect again.'
         await this.store
@@ -116,9 +187,12 @@ export class ConnectionJobs {
           .catch(() => {})
       })
       .finally(() => {
+        acceptsAuthorization = false
+        delete job.authorizationUrl
         clearTimeout(timer)
         job.finishedAt = new Date().toISOString()
         this.controllers.delete(job.id)
+        this.generations.delete(job.id)
         for (const [id, entry] of this.entries) {
           if (this.entries.size <= 100) break
           if (entry.state !== 'running') this.entries.delete(id)

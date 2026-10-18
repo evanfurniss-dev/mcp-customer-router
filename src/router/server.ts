@@ -95,7 +95,7 @@ export function createRouterServer(options: ServerOptions) {
     '/api/state',
     route(async (_request, response) => {
       const registry = await options.store.read()
-      response.json({ ...registry, jobs: jobs.list() })
+      response.json({ ...registry, jobs: await jobs.snapshot() })
     }),
   )
   app.post(

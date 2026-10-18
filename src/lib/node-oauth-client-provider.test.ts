@@ -122,7 +122,8 @@ describe('NodeOAuthClientProvider - OAuth Scope Handling', () => {
     })
 
     it.each(['invalid_client', 'unauthorized_client'])('reports a cached dynamic registration rejected with %s', async (errorCode) => {
-      provider = new NodeOAuthClientProvider(defaultOptions)
+      const onAuthorizationUrl = vi.fn()
+      provider = new NodeOAuthClientProvider({ ...defaultOptions, onAuthorizationUrl })
       mockReadJsonFile.mockResolvedValueOnce({
         client_id: 'stale-client',
         redirect_uris: ['http://localhost:8080/oauth/callback'],
@@ -141,6 +142,7 @@ describe('NodeOAuthClientProvider - OAuth Scope Handling', () => {
       ).rejects.toMatchObject({ constructor: OAuthError, code: errorCode })
 
       expect(mockDeleteConfigFile).not.toHaveBeenCalled()
+      expect(onAuthorizationUrl).not.toHaveBeenCalled()
     })
 
     it('lets the SDK clear and re-register a cached dynamic client once', async () => {
@@ -1666,7 +1668,8 @@ describe('NodeOAuthClientProvider - a sign-in loop that never reaches a token', 
   it('Scenario: Stop opening browser tabs once it is clear the sign-ins are not completing', async () => {
     // Given a reconnect loop that fails before any token is issued, so the token brake - which
     // counts tokens written - never accumulates anything to fire on (issue #352)
-    const provider = new NodeOAuthClientProvider(options)
+    const onAuthorizationUrl = vi.fn()
+    const provider = new NodeOAuthClientProvider({ ...options, onAuthorizationUrl })
     const authorize = () => provider.redirectToAuthorization(new URL('https://auth.example.com/authorize?client_id=c1'))
 
     // Five sign-ins is already more than a person starts in half a minute
@@ -1676,6 +1679,7 @@ describe('NodeOAuthClientProvider - a sign-in loop that never reaches a token', 
 
     // Then the next one stops rather than opening another tab
     await expect(authorize()).rejects.toThrow('none of which completed')
+    expect(onAuthorizationUrl).toHaveBeenCalledTimes(5)
   })
 })
 

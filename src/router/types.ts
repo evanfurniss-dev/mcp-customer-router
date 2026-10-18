@@ -36,6 +36,8 @@ export interface ConnectionJob {
   message: string
   startedAt: string
   finishedAt?: string
+  /** Active sign-in only. Never persisted with customer records. */
+  authorizationUrl?: string
 }
 
 export class UserError extends Error {

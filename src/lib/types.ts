@@ -50,6 +50,8 @@ export interface OAuthProviderOptions {
   authorizeResource?: string
   /** Omit the RFC 8707 resource parameter entirely (some servers reject it, e.g. Entra ID v2) */
   skipResourceParameter?: boolean
+  /** Report the final browser authorization URL after preflight and loop checks. */
+  onAuthorizationUrl?: (url: string) => void | Promise<void>
   /** Extra query parameters to add to the authorization URL, for servers that require their own */
   authorizeParams?: Record<string, string>
   /** Pre-calculated server URL hash for cache isolation */

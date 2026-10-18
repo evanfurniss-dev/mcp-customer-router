@@ -167,12 +167,43 @@ class CustomerOAuthProvider extends NodeOAuthClientProvider {
     options: OAuthProviderOptions,
     private readonly guard: GenerationGuard,
     private readonly allowLogin: boolean,
+    onAuthorizationUrl?: (url: string) => void | Promise<void>,
   ) {
-    super(options)
+    super({ ...options, onAuthorizationUrl: undefined })
     // This router supports Glide's same-origin OAuth service and the equivalent local fixture only.
     this.expectedIssuer = new URL(options.resourceServerUrl || options.serverUrl).origin
     this.assertEndpoint(options.serverUrl)
     this.assertMetadata(options.authorizationServerMetadata)
+    if (allowLogin) {
+      this.options.onAuthorizationUrl = async (url) => {
+        await this.assertAuthorizationUrl(url)
+        await this.guard.assertCurrent()
+        await onAuthorizationUrl?.(url)
+      }
+    }
+  }
+
+  private async assertAuthorizationUrl(value: string): Promise<void> {
+    const metadata = await this.getAuthorizationServerMetadata()
+    this.assertEndpoint(value)
+    try {
+      if (!metadata?.authorization_endpoint || value.length > 16_384) throw new Error()
+      const url = new URL(value)
+      const endpoint = new URL(metadata.authorization_endpoint)
+      const redirect = `http://localhost:${this.options.callbackPort}/oauth/callback`
+      if (
+        url.origin !== endpoint.origin ||
+        url.pathname !== endpoint.pathname ||
+        url.searchParams.getAll('redirect_uri').length !== 1 ||
+        url.searchParams.get('redirect_uri') !== redirect
+      )
+        throw new Error()
+      for (const key of new Set(endpoint.searchParams.keys())) {
+        if (JSON.stringify(url.searchParams.getAll(key)) !== JSON.stringify(endpoint.searchParams.getAll(key))) throw new Error()
+      }
+    } catch {
+      throw new ConnectionError('unverified', 'The sign-in link is invalid. Restart Connect.')
+    }
   }
 
   private assertIssuer(issuer: unknown): void {
@@ -297,7 +328,12 @@ export function guardTransport(transport: Transport, guard: GenerationGuard): vo
 }
 
 /** Must run in a dedicated child process: the upstream auth store uses one process-wide directory. */
-export async function runCustomerConnection(spec: ConnectionSpec, mode: ConnectionMode, local?: Transport) {
+export async function runCustomerConnection(
+  spec: ConnectionSpec,
+  mode: ConnectionMode,
+  local?: Transport,
+  onAuthorizationUrl?: (url: string) => void | Promise<void>,
+) {
   const { customer, authDir } = spec
   dashboardOrigin(customer.serverUrl)
   if (
@@ -349,6 +385,7 @@ export async function runCustomerConnection(spec: ConnectionSpec, mode: Connecti
       },
       guard,
       allowLogin,
+      allowLogin ? onAuthorizationUrl : undefined,
     )
     const initializeAuth = async (options?: { forceRefresh?: boolean }) => {
       await guard.assertCurrent()

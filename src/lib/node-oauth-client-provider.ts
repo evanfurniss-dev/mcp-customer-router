@@ -1283,6 +1283,8 @@ export class NodeOAuthClientProvider implements OAuthClientProvider {
 
     this.guardAgainstAuthorizationStorm()
 
+    await this.options.onAuthorizationUrl?.(authorizationUrl.toString())
+
     if (await openBrowser(sanitizeUrl(authorizationUrl.toString()))) {
       log('Browser opened automatically.')
     } else {

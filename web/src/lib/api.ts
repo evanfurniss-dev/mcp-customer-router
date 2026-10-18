@@ -9,7 +9,7 @@ export interface Customer {
   updatedAt: string
   lastCheck?: { state: 'verified' | 'error' | 'mismatch' | 'unverified'; checkedAt: string; observedOrgId?: string; message: string }
 }
-export interface Job { id: string; customerId: string; state: 'running' | 'complete' | 'failed'; message: string; startedAt: string; finishedAt?: string }
+export interface Job { id: string; customerId: string; state: 'running' | 'complete' | 'failed'; message: string; startedAt: string; finishedAt?: string; authorizationUrl?: string }
 export interface RouterState { customers: Customer[]; bindings: { path: string; customerId: string; createdAt: string }[]; jobs: Job[] }
 export interface Plan { planId: string; projectPath: string; files: { path: string; content: string; changed: boolean }[]; warnings: string[] }
 let session: Promise<string> | undefined

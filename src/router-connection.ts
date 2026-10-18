@@ -2,7 +2,7 @@
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio'
 import { connectionFailure, runCustomerConnection, type ConnectionMode, type ConnectionSpec } from './router/connection'
 
-// Upstream diagnostics can contain OAuth URLs or server responses. This dedicated child emits only our fixed messages.
+// Upstream diagnostics can contain OAuth URLs or server responses. Keep stdout/stderr limited to our fixed messages.
 console.error = () => {}
 console.warn = () => {}
 console.log = () => {}
@@ -55,7 +55,22 @@ try {
   if (!spec || typeof spec.authDir !== 'string' || !spec.customer || typeof spec.customer.serverUrl !== 'string')
     throw new Error('Invalid spec')
   delete process.env.CUSTOMER_ROUTER_SPEC
-  const connection = await runCustomerConnection(spec, mode, mode === 'serve' ? new StdioServerTransport() : undefined)
+  const connection = await runCustomerConnection(
+    spec,
+    mode,
+    mode === 'serve' ? new StdioServerTransport() : undefined,
+    mode === 'connect'
+      ? async (url) => {
+          if (!process.send || !process.connected) return
+          await new Promise<void>((resolve, reject) => {
+            process.send?.({ type: 'authorization_ready', url }, (error: Error | null) => {
+              if (error) reject(new Error('Could not report the sign-in link.'))
+              else resolve()
+            })
+          })
+        }
+      : undefined,
+  )
   clearTimeout(startupDeadline)
   close = connection.close
   if (mode !== 'serve') {
