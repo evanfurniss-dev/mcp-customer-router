@@ -10,7 +10,7 @@ The build must save one authorization per customer, share it between Claude Code
 
 | Check                  | Result                                                                                                                                                                                                                                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Automated suite        | 623 tests passed across 25 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
+| Automated suite        | 634 tests passed across 26 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
 | Static checks          | Root formatting, lint, TypeScript and Knip passed. Frontend strict TypeScript passed.                                                                                                                                                                                                                  |
 | Build                  | Bridge and dashboard production builds passed.                                                                                                                                                                                                                                                         |
 | Shared authorization   | Two MCP clients used the same temporary customer store, with one refresh and independent protocol handshakes.                                                                                                                                                                                          |
@@ -61,6 +61,14 @@ A real child fixture completed authorization through the IPC link with browser l
 The original validators required at least two characters in both saved expectations and returned citation paths. They now accept one through 128 allowed characters, with IDs kept as strings. Regression tests save and reload fixture organization `1`, verify its citation and real SDK connection, reject empty IDs, and retain mismatch blocking between separate customers.
 
 An existing live authorization passed the identity check after the saved expectation was corrected to the verified organization. The check reused that authorization without a new sign-in. The local registry was backed up before the correction; credential files were preserved. This verifies one live connection. Multi-organization client transfer and long-running refresh still require the acceptance checks below.
+
+## Native project folder picker
+
+The dashboard now opens a macOS folder picker through an authenticated local POST action. The command is fixed and receives no request-supplied script text. It returns a canonical directory path, or null on cancellation. One picker can run at a time; it is stopped when the browser request closes or after 120 seconds. Choosing a folder writes no project settings or registry records.
+
+Automated checks cover selection, cancellation, invalid results, safe errors, timeout, unsupported operating systems, session protection, concurrent requests, and request cancellation followed by a new picker. Frontend browser checks preserve trailing spaces in selected paths, clear stale previews only after selection, preserve previews on Cancel, restore focus, disable Apply while picking, and fit a 320px viewport.
+
+A click in Chromium against the running local dashboard opened the native **Choose a Folder** window. A screenshot of that window was inspected at `/private/tmp/router-folder-native.png`; closing the test page removed it. No project settings were applied. Native button selection and cancellation were not automated because desktop-control access was unavailable; those returned outcomes were covered with fixture responses. Browser results are recorded in `/private/tmp/router-folder-ui-results.json`.
 
 ## Live acceptance still required
 

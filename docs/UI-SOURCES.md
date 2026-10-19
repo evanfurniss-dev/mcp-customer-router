@@ -33,6 +33,8 @@ The UI obtains a session token from `/api/session` and keeps it in memory. All A
 
 Hash links open customer records and preserve search/filter state. A project preview is scoped to the selected customer and cleared when the path changes. Apply requires a verified identity and acknowledgment of all supplied warnings. Generated snippets are labeled as partial file entries. Success means settings were saved; the UI instructs the user to start a new client session and check project trust and tool identity. Removal describes the saved entry and retained authentication files accurately.
 
+**Choose folder** reuses the local COSS Button and Input in `web/src/App.tsx`. It opens the native macOS folder dialog through the authenticated local API. A successful choice fills the exact returned path and clears an older preview. Cancel keeps the path and preview. Project controls are disabled while the dialog is open; focus returns to the chooser button afterward. Manual path entry remains available. Choosing a folder does not apply settings.
+
 ## Verification
 
 - `pnpm --dir web install`: passed.
@@ -48,3 +50,7 @@ Hash links open customer records and preserve search/filter state. A project pre
 ### Sign-in link regression check
 
 The built interface was checked with intercepted synthetic API responses in Chromium at desktop and 320px widths. Tests covered preparation text, a focusable anchor, `target`/`rel` attributes, survival after reload, removal after completion or failure, and ordinary identity checks without sign-in prompts. No Connect action was clicked and no request reached Glide. The synthetic authorization URL used `example.invalid`. Results and screenshots are saved under `/private/tmp/router-sign-in-ui-results.json`, `/private/tmp/router-sign-in-desktop.png`, and `/private/tmp/router-sign-in-320.png`.
+
+### Folder-picker browser checks
+
+Chromium checked the built interface with synthetic picker responses at 1440px and 320px widths. Keyboard activation, focus restoration, cancellation preserving the current preview, selection clearing the old preview, disabled Apply during selection, error retry, and exact path submission passed. The selected fixture path ends in a space to detect accidental trimming. No Apply or Glide request was made. Evidence: `/private/tmp/router-folder-ui-results.json` and `/private/tmp/router-folder-{desktop,mobile}.png`. These intercepted responses verify frontend behavior; native dialog verification is recorded separately in `VERIFICATION.md`.

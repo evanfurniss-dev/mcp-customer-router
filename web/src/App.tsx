@@ -191,16 +191,28 @@ function CustomerDetail({ customer, bindings, jobs, headingRef, unavailable, ref
 function ProjectBinding({ customer, bindings, unavailable, refresh, announce }: { customer: Customer; bindings: RouterState['bindings']; unavailable: boolean; refresh: () => Promise<RouterState | null>; announce: (message: string) => void }) {
   const [path, setPath] = useState('')
   const [plan, setPlan] = useState<Plan | null>(null)
-  const [busy, setBusy] = useState<'preview' | 'apply' | null>(null)
+  const [busy, setBusy] = useState<'choose' | 'preview' | 'apply' | null>(null)
   const [error, setError] = useState('')
   const [applied, setApplied] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
   const previewRef = useRef<HTMLHeadingElement>(null)
+  const folderButton = useRef<HTMLButtonElement>(null)
   const verified = customer.lastCheck?.state === 'verified'
   useEffect(() => { if (plan) previewRef.current?.focus() }, [plan])
+  async function chooseFolder() {
+    setBusy('choose'); setError(''); announce('Choose a project folder in the macOS dialog.')
+    try {
+      const result = await post<{ projectPath: string | null }>('/api/projects/choose-folder', {})
+      if (result.projectPath !== null) {
+        setPath(result.projectPath); setPlan(null); setApplied(''); setAcknowledged(false)
+        announce('Folder selected. Review settings to continue.')
+      } else { announce('Folder selection canceled.') }
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setBusy(null); window.requestAnimationFrame(() => folderButton.current?.focus()) }
+  }
   async function preview(event: FormEvent) {
     event.preventDefault(); setBusy('preview'); setError(''); setApplied(''); setPlan(null); setAcknowledged(false)
-    try { setPlan(await post<Plan>('/api/projects/preview', { customerId: customer.id, projectPath: path.trim() })) }
+    try { setPlan(await post<Plan>('/api/projects/preview', { customerId: customer.id, projectPath: path })) }
     catch (e) { setError(errorMessage(e)) } finally { setBusy(null) }
   }
   async function apply() {
@@ -213,11 +225,12 @@ function ProjectBinding({ customer, bindings, unavailable, refresh, announce }: 
   }
   return <section className="project-section">
     <div className="section-heading"><div><h2>Project bindings</h2><p>Each folder uses one customer connection.</p></div><Badge variant="secondary">{bindings.length}</Badge></div>
-    {bindings.length > 0 && <ul className="bound-projects">{bindings.map(binding => <li key={binding.path}><Folder aria-hidden="true" /><div><button className="path-button mono" onClick={() => { setPath(binding.path); setPlan(null); setApplied(''); setError('') }}>{binding.path}</button><p>Settings saved {dateLabel(binding.createdAt)}</p></div><Badge variant="outline">Bound</Badge></li>)}</ul>}
+    {bindings.length > 0 && <ul className="bound-projects">{bindings.map(binding => <li key={binding.path}><Folder aria-hidden="true" /><div><button className="path-button mono" disabled={busy !== null} onClick={() => { setPath(binding.path); setPlan(null); setApplied(''); setError('') }}>{binding.path}</button><p>Settings saved {dateLabel(binding.createdAt)}</p></div><Badge variant="outline">Bound</Badge></li>)}</ul>}
     <form className="project-form" onSubmit={preview}>
-      <Field id="project-path" label={bindings.length ? 'Bind another project' : 'Project folder'} hint="Paste the full path to an existing folder on this Mac."><div className="project-input-row"><Input id="project-path" name="projectPath" value={path} onChange={event => { setPath(event.target.value); setPlan(null); setError(''); setApplied('') }} required autoComplete="off" spellCheck={false} placeholder="/Users/you/Projects/customer-project" aria-describedby="project-path-hint" disabled={busy !== null} /><Button type="submit" variant="outline" loading={busy === 'preview'} disabled={busy !== null || unavailable}>Review settings<ArrowRight aria-hidden="true" /></Button></div></Field>
+      <Field id="project-path" label={bindings.length ? 'Bind another project' : 'Project folder'} hint="Choose a folder on this Mac, or enter its full path."><div className="project-input-row"><Input id="project-path" name="projectPath" value={path} onChange={event => { setPath(event.target.value); setPlan(null); setError(''); setApplied('') }} required autoComplete="off" spellCheck={false} placeholder="/Users/you/Projects/customer-project" aria-describedby="project-path-hint" disabled={busy !== null} /><Button ref={folderButton} variant="outline" onClick={() => void chooseFolder()} loading={busy === 'choose'} disabled={busy !== null || unavailable}><Folder aria-hidden="true" />Choose folder</Button><Button type="submit" variant="outline" loading={busy === 'preview'} disabled={busy !== null || unavailable}>Review settings<ArrowRight aria-hidden="true" /></Button></div></Field>
     </form>
-    {error && <Notice tone="error">{error}<p>Review the settings again before applying.</p></Notice>}
+    {busy === 'choose' && <p className="field-hint" role="status">The folder picker is open on this Mac.</p>}
+    {error && <Notice tone="error">{error}</Notice>}
     {applied && <Notice tone="success"><strong>Project settings saved</strong><p className="mono break-anywhere">{applied}</p><p>Start a new session in your coding tool. Confirm the project is trusted and its customer connection is available.</p></Notice>}
     {plan && <div className="config-review"><div className="review-heading"><div><p className="eyebrow">Review before applying</p><h3 ref={previewRef} tabIndex={-1}>Settings for {customer.name}</h3><p className="mono break-anywhere">{plan.projectPath}</p></div><Badge variant="outline">Preview</Badge></div>
       {!verified && <Notice tone="warning">Verify this customer’s Glide identity before applying the project settings.</Notice>}
@@ -225,7 +238,7 @@ function ProjectBinding({ customer, bindings, unavailable, refresh, announce }: 
       <p className="preview-caption">Generated entries for this customer. Existing file contents may also remain in each file.</p>
       <div className="preview-files">{plan.files.map(file => <details key={file.path} open><summary><span className="mono">{file.path}</span><Badge variant={file.changed ? 'info' : 'secondary'}>{file.changed ? 'Will change' : 'No change'}</Badge></summary><pre tabIndex={0} aria-label={`Generated settings for ${file.path}`}><code>{file.content}</code></pre></details>)}</div>
       {plan.warnings.length > 0 && <label className="warning-acknowledgment"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} /><span>I reviewed the existing connection warnings.</span></label>}
-      <div className="review-actions"><Button variant="ghost" disabled={busy === 'apply'} onClick={() => setPlan(null)}>Cancel review</Button><Button onClick={() => void apply()} loading={busy === 'apply'} disabled={!verified || unavailable || (plan.warnings.length > 0 && !acknowledged)}>Apply project settings</Button></div>
+      <div className="review-actions"><Button variant="ghost" disabled={busy !== null} onClick={() => setPlan(null)}>Cancel review</Button><Button onClick={() => void apply()} loading={busy === 'apply'} disabled={busy !== null || !verified || unavailable || (plan.warnings.length > 0 && !acknowledged)}>Apply project settings</Button></div>
     </div>}
   </section>
 }

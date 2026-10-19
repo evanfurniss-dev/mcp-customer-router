@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import fs from 'node:fs/promises'
 import { RegistryStore } from './registry'
 import { ConnectionJobs } from './jobs'
+import { chooseProjectFolder } from './folder-picker'
 import { UserError } from './types'
 import {
   applyProjectConfig,
@@ -19,6 +20,7 @@ interface ServerOptions {
   jobs?: ConnectionJobs
   cliPath?: string
   webPath?: string
+  chooseFolder?: (signal: AbortSignal) => Promise<string | null>
 }
 
 export function createRouterServer(options: ServerOptions) {
@@ -27,6 +29,7 @@ export function createRouterServer(options: ServerOptions) {
   const jobs = options.jobs ?? new ConnectionJobs(options.store)
   const token = randomUUID()
   const plans = new Map<string, { plan: ProjectConfigPlan; customerId: string; expiresAt: number }>()
+  let choosingFolder = false
   const cliPath = options.cliPath ?? fileURLToPath(new URL('./router-cli.js', import.meta.url))
   const nodePath = (async () => {
     // Homebrew's versioned executable can disappear after an upgrade. Prefer its stable link when it is this runtime.
@@ -121,6 +124,26 @@ export function createRouterServer(options: ServerOptions) {
       }),
     )
   }
+
+  app.post(
+    '/api/projects/choose-folder',
+    route(async (_request, response) => {
+      if (choosingFolder) throw new UserError('A folder chooser is already open. Finish or cancel it before opening another.', 409)
+      choosingFolder = true
+      const controller = new AbortController()
+      const stopPicker = () => controller.abort()
+      response.once('close', stopPicker)
+      server.once('close', stopPicker)
+      try {
+        const projectPath = await (options.chooseFolder ?? chooseProjectFolder)(controller.signal)
+        if (!response.destroyed) response.json({ projectPath })
+      } finally {
+        response.removeListener('close', stopPicker)
+        server.removeListener('close', stopPicker)
+        choosingFolder = false
+      }
+    }),
+  )
 
   app.post(
     '/api/projects/preview',

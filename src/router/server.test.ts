@@ -6,10 +6,11 @@ import { request as httpRequest, type Server } from 'node:http'
 import { RegistryStore } from './registry'
 import { createRouterServer } from './server'
 import { ConnectionJobs } from './jobs'
+import { UserError } from './types'
 
 const homes: string[] = []
 const servers: Server[] = []
-async function setup() {
+async function setup(chooseFolder?: (signal: AbortSignal) => Promise<string | null>) {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'router-api-'))
   homes.push(home)
   vi.stubEnv('HOME', home)
@@ -22,16 +23,17 @@ async function setup() {
     message: 'Organization verified.',
   }))
   const jobs = new ConnectionJobs(store, runner)
-  const { server } = createRouterServer({ store, jobs, cliPath: '/opt/router/dist/router-cli.js' })
+  const { server } = createRouterServer({ store, jobs, cliPath: '/opt/router/dist/router-cli.js', chooseFolder })
   servers.push(server)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address()
   if (!address || typeof address === 'string') throw new Error('No server address')
   const origin = `http://127.0.0.1:${address.port}`
   const session = (await (await fetch(`${origin}/api/session`)).json()) as { token: string }
-  const request = (route: string, method = 'GET', body?: unknown) =>
+  const request = (route: string, method = 'GET', body?: unknown, signal?: AbortSignal) =>
     fetch(`${origin}${route}`, {
       method,
+      signal,
       headers: { 'x-router-token': session.token, 'content-type': 'application/json', origin },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
@@ -47,6 +49,84 @@ afterEach(async () => {
 })
 
 describe('local dashboard API', () => {
+  it('requires authorization before opening a folder chooser', async () => {
+    const chooseFolder = vi.fn(async () => null)
+    const { origin, request } = await setup(chooseFolder)
+    expect((await fetch(`${origin}/api/projects/choose-folder`, { method: 'POST' })).status).toBe(403)
+    expect(
+      (await fetch(`${origin}/api/projects/choose-folder`, { method: 'POST', headers: { origin: 'https://evil.invalid' } })).status,
+    ).toBe(403)
+    expect(chooseFolder).not.toHaveBeenCalled()
+    expect((await request('/api/projects/choose-folder', 'POST')).status).toBe(200)
+    expect(chooseFolder).toHaveBeenCalledOnce()
+  })
+
+  it('returns the chosen folder or cancellation without writing project settings or the registry', async () => {
+    const chooseFolder = vi.fn<() => Promise<string | null>>()
+    const { home, request } = await setup(chooseFolder)
+    const project = path.join(home, 'project')
+    await fs.mkdir(project)
+    const before = await fs.readdir(home)
+    chooseFolder.mockResolvedValueOnce(await fs.realpath(project)).mockResolvedValueOnce(null)
+
+    const selected = await request('/api/projects/choose-folder', 'POST', { prompt: 'Request text must not reach osascript' })
+    expect(selected.status).toBe(200)
+    expect(await selected.json()).toEqual({ projectPath: await fs.realpath(project) })
+    expect(chooseFolder).toHaveBeenNthCalledWith(1, expect.any(AbortSignal))
+    const canceled = await request('/api/projects/choose-folder', 'POST')
+    expect(canceled.status).toBe(200)
+    expect(await canceled.json()).toEqual({ projectPath: null })
+    expect(await fs.readdir(home)).toEqual(before)
+    expect(await fs.readdir(project)).toEqual([])
+  })
+
+  it('allows one chooser at a time and releases it after an error', async () => {
+    let rejectPicker!: (error: Error) => void
+    const chooseFolder = vi
+      .fn<() => Promise<string | null>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectPicker = reject
+          }),
+      )
+      .mockResolvedValue(null)
+    const { request } = await setup(chooseFolder)
+    const first = request('/api/projects/choose-folder', 'POST')
+    await vi.waitFor(() => expect(chooseFolder).toHaveBeenCalledOnce())
+    expect((await request('/api/projects/choose-folder', 'POST')).status).toBe(409)
+    expect(chooseFolder).toHaveBeenCalledOnce()
+    rejectPicker(new UserError('Choose a folder again, or enter its path.', 500))
+    const failed = await first
+    expect(failed.status).toBe(500)
+    expect(await failed.json()).toEqual({ error: 'Choose a folder again, or enter its path.' })
+    expect((await request('/api/projects/choose-folder', 'POST')).status).toBe(200)
+    expect(chooseFolder).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops an abandoned chooser request and permits the next chooser', async () => {
+    let pickerSignal!: AbortSignal
+    const chooseFolder = vi
+      .fn<(signal: AbortSignal) => Promise<string | null>>()
+      .mockImplementationOnce(
+        (signal) =>
+          new Promise((resolve) => {
+            pickerSignal = signal
+            signal.addEventListener('abort', () => resolve(null), { once: true })
+          }),
+      )
+      .mockResolvedValue(null)
+    const { request } = await setup(chooseFolder)
+    const controller = new AbortController()
+    const abandoned = request('/api/projects/choose-folder', 'POST', undefined, controller.signal).catch((error: Error) => error.name)
+    await vi.waitFor(() => expect(chooseFolder).toHaveBeenCalledOnce())
+    controller.abort()
+    expect(await abandoned).toBe('AbortError')
+    await vi.waitFor(() => expect(pickerSignal.aborted).toBe(true))
+    expect((await request('/api/projects/choose-folder', 'POST')).status).toBe(200)
+    expect(chooseFolder).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects cross-site requests, hostile Host headers, and missing session tokens', async () => {
     const { origin, store } = await setup()
     expect((await fetch(`${origin}/api/state`)).status).toBe(403)

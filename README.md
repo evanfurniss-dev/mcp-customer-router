@@ -21,7 +21,7 @@ On a Mac with dependencies already installed and the build complete, open **Star
 
 1. Select **Add customer**. Enter its name and business label. Copy its organization ID from its Glide URL, such as the ID after `/o/` in `https://os.glideapps.dev/o/ORG_ID/projects`.
 2. Open the customer and select **Connect**. If a browser does not open, select **Open Glide sign-in** in the active job. Finish Glide sign-in and choose that organization. The router reads `project_list` and checks its server-owned organization citation before showing **Verified**.
-3. Enter the full path to the customer's local project. Preview the generated Claude and Codex settings. Review any warnings about existing Glide connections, then apply.
+3. Select **Choose folder** to pick the customer's local project in the macOS folder dialog, or enter its full path. Select **Review settings** to preview the generated Claude and Codex settings. Review any warnings about existing Glide connections, then apply.
 4. Open a fresh Claude Code or Codex session in that project. Codex requires the project to be trusted. Claude may ask to approve the project's MCP entry. These are local project approvals; they do not repeat Glide sign-in. In T3, open that project and start a fresh provider session.
 
 **Connect** starts a fresh authorization for only the selected customer. It invalidates older router sessions for that customer. **Check connection** reuses the saved grant and never opens a new sign-in. Refresh of an existing grant happens automatically.
