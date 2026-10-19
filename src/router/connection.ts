@@ -17,6 +17,7 @@ import { createLazyAuthCoordinator, hasUsableTokens } from '../lib/coordination'
 import { connectToRemoteServer, discoverOAuthServerInfo, fetchWithMcpHeaders, getServerUrlHash, mcpProxy } from '../lib/utils'
 import type { OAuthProviderOptions } from '../lib/types'
 import type { ConnectionCheck, Customer } from './types'
+import { IdentityGateTransport } from './identity-gate-transport'
 
 export type ConnectionMode = 'connect' | 'check' | 'serve'
 export interface ConnectionSpec {
@@ -359,14 +360,21 @@ export async function runCustomerConnection(
     { name: 'customer-router-identity', version: '0.1.0' },
     { capabilities: {}, versionNegotiation: { mode: 'auto' } },
   )
+  const clientTransport = mode === 'serve' && local ? new IdentityGateTransport(local) : undefined
   let remote: Transport | undefined
   let closed = false
   const close = async () => {
     if (closed) return
     closed = true
-    await Promise.allSettled([probe.close(), coordinator.release(), ...(remote ? [remote.close()] : []), ...(local ? [local.close()] : [])])
+    await Promise.allSettled([
+      probe.close(),
+      coordinator.release(),
+      ...(remote ? [remote.close()] : []),
+      ...(clientTransport ? [clientTransport.close()] : local ? [local.close()] : []),
+    ])
   }
   try {
+    await clientTransport?.start()
     const discovery = await discoverOAuthServerInfo(customer.serverUrl, {})
     await guard.assertCurrent()
     const provider = new CustomerOAuthProvider(
@@ -412,13 +420,13 @@ export async function runCustomerConnection(
       await close()
       return { check, close }
     }
-    if (!local) throw new ConnectionError('error', 'The local MCP transport is missing.')
+    if (!clientTransport) throw new ConnectionError('error', 'The local MCP transport is missing.')
     // This fresh transport has no handshake yet. The downstream client owns its initialize/discover.
     remote = new StreamableHTTPClientTransport(new URL(customer.serverUrl), { authProvider: provider, fetch: fetchWithMcpHeaders })
     guardTransport(remote, guard)
-    mcpProxy({ transportToClient: local, transportToServer: remote, protocolMode: 'auto' })
+    mcpProxy({ transportToClient: clientTransport, transportToServer: remote, protocolMode: 'auto' })
     await remote.start()
-    await local.start()
+    clientTransport.release()
     return { check, close }
   } catch (error) {
     await close()

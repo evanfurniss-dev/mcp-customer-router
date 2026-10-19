@@ -160,7 +160,16 @@ async function checkChild(spec: ConnectionSpec) {
   })
 }
 
-async function fixture() {
+async function fixture({ holdIdentity = false } = {}) {
+  let releaseIdentity!: () => void
+  let markIdentityRequested!: () => void
+  const identityReleased = new Promise<void>((resolve) => {
+    releaseIdentity = resolve
+  })
+  const identityRequested = new Promise<void>((resolve) => {
+    markIdentityRequested = resolve
+  })
+  if (!holdIdentity) releaseIdentity()
   let origin = ''
   let refreshes = 0
   let revoked = false
@@ -262,6 +271,8 @@ async function fixture() {
     } else if (message.method === 'tools/list') {
       reply({ tools: [{ name: 'echo', description: 'Read the fixture identity.', inputSchema: { type: 'object' } }] })
     } else if (message.method === 'tools/call' && message.params.name === 'project_list') {
+      markIdentityRequested()
+      await identityReleased
       reply(identity(org, origin))
     } else if (message.method === 'tools/call' && message.params.name === 'write_once') {
       writes++
@@ -278,6 +289,7 @@ async function fixture() {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   cleanups.push(async () => {
+    releaseIdentity()
     server.closeAllConnections()
     await new Promise<void>((resolve) => server.close(() => resolve()))
   })
@@ -334,6 +346,8 @@ async function fixture() {
     spec,
     client,
     calls,
+    identityRequested,
+    releaseIdentity,
     refreshes: () => refreshes,
     writes: () => writes,
     registrations: () => registrations,
@@ -351,6 +365,44 @@ async function fixture() {
   }
 }
 
+async function rawClient(configuration: ConnectionSpec) {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: ['--import', 'tsx', entry, '--mode', 'serve'],
+    env: childEnv(configuration),
+    stderr: 'pipe',
+  })
+  const messages: Array<Parameters<Transport['send']>[0]> = []
+  const errors: string[] = []
+  let closed = false
+  let stderr = ''
+  transport.onmessage = (message) => {
+    messages.push(message)
+  }
+  transport.onerror = (error) => {
+    errors.push(error.message)
+  }
+  transport.onclose = () => {
+    closed = true
+  }
+  transport.stderr?.on('data', (part) => {
+    stderr += part
+  })
+  cleanups.push(() => transport.close())
+  await transport.start()
+  return {
+    transport,
+    messages,
+    errors,
+    closed: () => closed,
+    stderr: () => stderr,
+    response: async (id: string) => {
+      await vi.waitFor(() => expect(messages.some((message) => 'id' in message && message.id === id)).toBe(true), { timeout: 5000 })
+      return messages.find((message) => 'id' in message && message.id === id)
+    },
+  }
+}
+
 async function freeCallbackPort() {
   const server = http.createServer()
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -360,6 +412,64 @@ async function freeCallbackPort() {
 }
 
 describe('real SDK clients against a local OAuth fixture', () => {
+  it('answers discovery while identity is held, then completes the legacy handshake and exposes tools once verified', async () => {
+    const remote = await fixture({ holdIdentity: true })
+    const configuration = await remote.spec('customer-a')
+    const raw = await rawClient(configuration)
+    const probeId = 'server-discover-probe-1'
+    await raw.transport.send({ jsonrpc: '2.0', id: probeId, method: 'server/discover', params: {} })
+    expect(await raw.response(probeId)).toMatchObject({ id: probeId, error: { code: -32601 } })
+    await raw.transport.send({
+      jsonrpc: '2.0',
+      id: 'client-initialize',
+      method: 'initialize',
+      params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'held-identity-client', version: '1' } },
+    })
+    await remote.identityRequested
+    expect(raw.messages).toHaveLength(1)
+    expect(remote.calls.filter((call) => call.method === 'initialize')).toHaveLength(1)
+    expect(remote.calls.filter((call) => call.method === 'tools/call').map((call) => call.tool)).toEqual(['project_list'])
+    expect(remote.calls.filter((call) => call.method === 'tools/list')).toHaveLength(0)
+
+    remote.releaseIdentity()
+    expect(await raw.response('client-initialize')).toMatchObject({ result: { capabilities: { tools: {} } } })
+    await raw.transport.send({ jsonrpc: '2.0', method: 'notifications/initialized' })
+    await raw.transport.send({ jsonrpc: '2.0', id: 'client-tools', method: 'tools/list', params: {} })
+    expect(await raw.response('client-tools')).toMatchObject({ result: { tools: [{ name: 'echo' }] } })
+    await raw.transport.send({ jsonrpc: '2.0', id: 'client-echo', method: 'tools/call', params: { name: 'echo', arguments: {} } })
+    expect(await raw.response('client-echo')).toMatchObject({ result: { content: [{ text: 'customer-a' }] } })
+    expect(raw.messages.filter((message) => 'id' in message && message.id === probeId)).toHaveLength(1)
+    expect(remote.calls.filter((call) => call.method === 'initialize')).toHaveLength(2)
+    expect(raw.errors).toEqual([])
+    expect(raw.stderr()).toBe('')
+  }, 15000)
+
+  it('closes without forwarding queued requests when the held identity belongs to another customer', async () => {
+    const remote = await fixture({ holdIdentity: true })
+    const configuration = await remote.spec('customer-b')
+    configuration.customer.expectedOrgId = 'customer-a'
+    const raw = await rawClient(configuration)
+    const probeId = 'server-discover-probe-1'
+    await raw.transport.send({ jsonrpc: '2.0', id: probeId, method: 'server/discover', params: {} })
+    expect(await raw.response(probeId)).toMatchObject({ id: probeId, error: { code: -32601 } })
+    await raw.transport.send({
+      jsonrpc: '2.0',
+      id: 'client-initialize',
+      method: 'initialize',
+      params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'mismatched-identity-client', version: '1' } },
+    })
+    await raw.transport.send({ jsonrpc: '2.0', id: 'queued-echo', method: 'tools/call', params: { name: 'echo', arguments: {} } })
+    await remote.identityRequested
+    expect(remote.calls.filter((call) => call.method === 'tools/call').map((call) => call.tool)).toEqual(['project_list'])
+
+    remote.releaseIdentity()
+    await vi.waitFor(() => expect(raw.closed()).toBe(true), { timeout: 5000 })
+    expect(raw.messages).toHaveLength(1)
+    expect(remote.calls.filter((call) => call.method === 'initialize')).toHaveLength(1)
+    expect(remote.calls.filter((call) => call.method === 'tools/call').map((call) => call.tool)).toEqual(['project_list'])
+    expect(raw.stderr()).toBe('This sign-in belongs to a different organization. Tools are blocked.\n')
+  }, 15000)
+
   it('completes explicit fresh sign-in on the assigned callback port using only the selected customer store', async () => {
     const remote = await fixture()
     const configuration = await remote.spec('customer-b')

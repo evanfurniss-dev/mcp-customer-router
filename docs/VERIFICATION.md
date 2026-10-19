@@ -10,7 +10,7 @@ The build must save one authorization per customer, share it between Claude Code
 
 | Check                  | Result                                                                                                                                                                                                                                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Automated suite        | 634 tests passed across 26 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
+| Automated suite        | 644 tests passed across 27 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
 | Static checks          | Root formatting, lint, TypeScript and Knip passed. Frontend strict TypeScript passed.                                                                                                                                                                                                                  |
 | Build                  | Bridge and dashboard production builds passed.                                                                                                                                                                                                                                                         |
 | Shared authorization   | Two MCP clients used the same temporary customer store, with one refresh and independent protocol handshakes.                                                                                                                                                                                          |
@@ -70,6 +70,20 @@ Automated checks cover selection, cancellation, invalid results, safe errors, ti
 
 A click in Chromium against the running local dashboard opened the native **Choose a Folder** window. A screenshot of that window was inspected at `/private/tmp/router-folder-native.png`; closing the test page removed it. No project settings were applied. Native button selection and cancellation were not automated because desktop-control access was unavailable; those returned outcomes were covered with fixture responses. Browser results are recorded in `/private/tmp/router-folder-ui-results.json`.
 
+## Claude startup discovery repair
+
+A user session in T3 Code 0.0.45 exposed customer guidance resources but no customer tools. Its transcript confirmed failed tool searches. It did not retain the transport diagnostics needed to prove the original cause.
+
+Three initialization-only checks with native Claude Code 2.1.287 against the pre-fix build at `f18f014` all eventually loaded 126 customer tools. However, the router delayed its answer to Claude's `server/discover` probe beyond the installed client's 3-second timeout. In one check, the late answer arrived after legacy initialization, producing `Received a response for an unknown message ID` for `server-discover-probe-1` and a dropped-connection log. This confirms an intermittent protocol error; it does not reproduce the original resources-only state.
+
+Serve mode now starts stdio before network identity verification and immediately rejects the optional discovery probe with `-32601`, directing the client to `initialize`. The existing proxy still negotiates the upstream protocol. Other client messages stay in a bounded queue until organization verification succeeds. A close, parse error, queue overflow or mismatched identity prevents release. Cancellation removes its queued request. Discovery probes remain local after verification.
+
+Three comparable native Claude checks through T3's bundled Agent SDK returned the discovery rejection in 303, 336 and 344 milliseconds. Each loaded 126 tools, including `project_list` and `auth_whoami`, with zero unknown-ID errors or dropped-connection logs. The saved customer authorization was reused. A separate SDK readback returned the expected organization citation and zero projects through the configured `customer-glide` route. No new login or customer write was needed.
+
+The added automated tests cover held identity verification, discovery response before release, successful handshake and tool execution after release, mismatched identity with zero forwarded user requests, queued cancellation, bounded input, and shutdown. The full 644-test suite, static checks, Knip and bridge build passed. An independent code review found no blocking defect.
+
+These native checks used only the customer server and sent no user prompt or model request. They do not prove tool selection in a normal T3 session with all configured servers. T3 0.0.45 marks its session ready before waiting for MCP inventory. A fresh T3 chat in the bound project is still required to verify the user path. Timing differences between whole runs do not establish a general latency improvement. Long-running connection durability was not tested.
+
 ## Live acceptance still required
 
 Use two test organizations before migrating customer work:
@@ -80,4 +94,4 @@ Use two test organizations before migrating customer work:
 4. Reconnect one customer while an older client is open. That client must fail until restarted. Confirm the other customer still works.
 5. Test refresh and revocation with the test organizations. Confirm that expired access either refreshes in the same customer store or stops with a clear sign-in requirement.
 
-The automated results use synthetic identities. T3 model execution, overnight refresh and 30-organization load trials remain unrun. No customer business data was changed. No existing Claude/Codex customer configuration was changed. This release has no scheduler or cloud execution. Local customer credentials use protected files; Mac Keychain storage is future work.
+Automated isolation tests use synthetic identities. The live checks above cover one saved customer route. T3 model execution, overnight refresh and 30-organization load trials remain unrun. No customer business data was changed. This startup repair changed no Claude/Codex project configuration. This release has no scheduler or cloud execution. Local customer credentials use protected files; Mac Keychain storage is future work.
