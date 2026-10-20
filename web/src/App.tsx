@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { ArrowLeft, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Check, CircleAlert, ListFilter, Moon, Plus, RefreshCw, Search, Sun, X } from 'lucide-react'
+import { Menu } from '@base-ui/react/menu'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogClose, DialogDescription, DialogFooter, DialogHeader, DialogPanel, DialogPopup, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { api, errorMessage, post, type Customer, type Job, type Plan, type RouterState } from '@/lib/api'
+import { useTheme } from '@/lib/theme'
 
 const EMPTY: RouterState = { customers: [], bindings: [], jobs: [] }
 function readRoute() { try { return decodeURIComponent(window.location.hash.slice(1)) } catch { return '' } }
@@ -18,18 +20,40 @@ function Notice({ children, tone = 'info' }: { children: ReactNode; tone?: 'info
     {children}
   </div>
 }
-function Status({ customer, running = false }: { customer: Customer; running?: boolean }) {
-  if (running) return <Badge variant="info">Running</Badge>
+function Status({ customer, running = false, compact = false }: { customer: Customer; running?: boolean; compact?: boolean }) {
   const state = customer.lastCheck?.state
-  return <Badge variant={state === 'verified' ? 'success' : state === 'mismatch' || state === 'error' ? 'error' : 'secondary'}>
-    {state === 'verified' ? 'Verified' : state === 'mismatch' ? 'Wrong organization' : state === 'error' ? 'Check failed' : 'Not connected'}
-  </Badge>
+  const failed = !running && (state === 'mismatch' || state === 'error')
+  const label = running ? 'Checking connection' : state === 'verified' ? 'Organization verified' : state === 'mismatch' ? 'Wrong organization' : state === 'error' ? 'Check failed' : 'Not connected'
+  return <span className={`connection-status ${failed ? 'status-error' : ''} ${compact ? 'status-compact' : ''}`} title={compact ? label : undefined}>
+    {running ? <RefreshCw className="busy-icon" aria-hidden="true" /> : state === 'verified' ? <Check aria-hidden="true" /> : failed ? <CircleAlert aria-hidden="true" /> : <span className="status-dot" aria-hidden="true" />}
+    <span className={compact && (state === 'verified' || running) ? 'sr-only' : ''}>{label}</span>
+  </span>
+}
+
+function BusinessFilter({ businesses, value, onChange }: { businesses: string[]; value: string; onChange: (value: string) => void }) {
+  return <Menu.Root>
+    <Menu.Trigger render={<Button variant="ghost" className={`icon-button filter-trigger ${value ? 'is-filtered' : ''}`} />} aria-label={`Business filter: ${value || 'All businesses'}`} title={value || 'Filter by business'}>
+      <ListFilter aria-hidden="true" />{value && <span className="filter-dot" aria-hidden="true" />}
+    </Menu.Trigger>
+    <Menu.Portal><Menu.Positioner sideOffset={8} align="end" collisionPadding={12} className="menu-positioner">
+      <Menu.Popup className="filter-menu" aria-label="Filter by business">
+        <Menu.Group><Menu.GroupLabel className="menu-label">Business</Menu.GroupLabel>
+          <Menu.RadioGroup value={value} onValueChange={onChange}>
+            {['', ...businesses].map(item => <Menu.RadioItem className="menu-option" value={item} key={item} closeOnClick>
+              <span>{item || 'All businesses'}</span><Menu.RadioItemIndicator><Check aria-hidden="true" /></Menu.RadioItemIndicator>
+            </Menu.RadioItem>)}
+          </Menu.RadioGroup>
+        </Menu.Group>
+      </Menu.Popup>
+    </Menu.Positioner></Menu.Portal>
+  </Menu.Root>
 }
 function Field({ label, id, hint, children }: { label: string; id: string; hint?: ReactNode; children: ReactNode }) {
   return <div className="form-field"><label htmlFor={id}>{label}</label>{children}{hint && <p id={`${id}-hint`} className="field-hint">{hint}</p>}</div>
 }
 
 export default function App() {
+  const { theme, setTheme } = useTheme()
   const [data, setData] = useState<RouterState>(EMPTY)
   const [loaded, setLoaded] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -81,18 +105,22 @@ export default function App() {
           <img src="/glide-mark.svg" width="26" height="26" alt="" />
           <span className="brand-name">Glide</span><span className="app-name">MCP router</span>
         </a>
-        <Button variant="outline" onClick={() => void load(true)} loading={loading}>Refresh</Button>
+        <div className="header-actions">
+          <Button variant="ghost" className="icon-button" onClick={() => void load(true)} loading={loading} aria-label="Refresh" title="Refresh"><RefreshCw aria-hidden="true" /></Button>
+          <Button variant="ghost" className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</Button>
+        </div>
       </header>
       <div className={`workspace-layout ${route ? 'has-detail' : ''}`}>
         <aside className="customer-sidebar" aria-label="Customer directory">
-          <div className="sidebar-heading"><h2>Customers <span className="count">{loaded ? data.customers.length : '…'}</span></h2><Button variant="outline" onClick={event => { newCustomerTrigger.current = event.currentTarget; setCreating(true) }} disabled={!loaded || !!error}>Add customer</Button></div>
+          <div className="sidebar-heading"><h2>Customers <span className="count">{loaded ? data.customers.length : '…'}</span></h2><Button variant="default" className="new-customer" aria-label="New customer" onClick={event => { newCustomerTrigger.current = event.currentTarget; setCreating(true) }} disabled={!loaded || !!error}><Plus aria-hidden="true" />New</Button></div>
           <div className="directory-controls">
-            <Field id="customer-search" label="Search"><Input id="customer-search" type="search" placeholder="Name or organization ID" value={query} onChange={event => setQuery(event.target.value)} /></Field>
-            <Field id="business-filter" label="Business"><select id="business-filter" className="native-select" value={business} onChange={event => setBusiness(event.target.value)}><option value="">All businesses</option>{businesses.map(item => <option key={item}>{item}</option>)}</select></Field>
+            <div className="directory-search"><Search aria-hidden="true" /><Input unstyled id="customer-search" aria-label="Search" type="search" placeholder="Search customers" value={query} onChange={event => setQuery(event.target.value)} />{query && <Button variant="ghost" className="icon-button clear-search" aria-label="Clear search" onClick={() => { setQuery(''); document.getElementById('customer-search')?.focus() }}><X aria-hidden="true" /></Button>}</div>
+            <BusinessFilter businesses={businesses} value={business} onChange={setBusiness} />
           </div>
+          {business && <div className="active-filter"><span>{business}</span><Button variant="ghost" className="icon-button" aria-label="Clear business filter" onClick={() => { setBusiness(''); document.getElementById('customer-search')?.focus() }}><X aria-hidden="true" /></Button></div>}
           <nav aria-label="Customers" className="customer-list">
             {filtered.map(item => <a href={`#${encodeURIComponent(item.id)}`} className={`customer-row ${route === item.id ? 'is-selected' : ''}`} aria-current={route === item.id ? 'page' : undefined} key={item.id}>
-              <span className="customer-row-content"><span className="customer-name">{item.name}</span>{item.business !== item.name && <span className="customer-business">{item.business}</span>}</span><Status customer={item} running={data.jobs.some(job => job.customerId === item.id && job.state === 'running')} />
+              <span className="customer-row-content"><span className="customer-name">{item.name}</span>{item.business !== item.name && <span className="customer-business">{item.business}</span>}</span><Status compact customer={item} running={data.jobs.some(job => job.customerId === item.id && job.state === 'running')} />
             </a>)}
             {loaded && filtered.length === 0 && <div className="directory-empty"><p>{data.customers.length ? 'No matching customers.' : 'No customers saved.'}</p>{(query || business) && <Button variant="ghost" onClick={() => { setQuery(''); setBusiness('') }}>Clear filters</Button>}</div>}
           </nav>
@@ -167,13 +195,13 @@ function CustomerDetail({ customer, bindings, jobs, headingRef, unavailable, ref
     <a href="#" className="back-link"><ArrowLeft aria-hidden="true" />All customers</a>
     <header className="detail-header"><h1 ref={headingRef} tabIndex={-1}>{customer.name}</h1><div className="detail-meta">{customer.business !== customer.name && <span>{customer.business}</span>}<Status customer={customer} running={running} /></div></header>
     <section className="connection-section" aria-label="Connection">
-      <dl className="identity-grid"><div><dt>Expected org</dt><dd className="mono">{customer.expectedOrgId}</dd></div>{customer.lastCheck?.observedOrgId && customer.lastCheck.observedOrgId !== customer.expectedOrgId && <div><dt>Observed org</dt><dd className="mono">{customer.lastCheck.observedOrgId}</dd></div>}<div className="endpoint-field"><dt>MCP endpoint</dt><dd className="mono">{customer.serverUrl}</dd></div><div><dt>Last check</dt><dd>{dateLabel(customer.lastCheck?.checkedAt)}</dd></div></dl>
+      <div className="connection-heading"><h2>Connection</h2><div className="connection-actions"><Button variant="outline" onClick={() => void run('connect')} loading={starting === 'connect'} disabled={running || unavailable}>{verified ? 'Reconnect Glide' : 'Connect Glide'}</Button><Button variant="outline" onClick={() => void run('check')} loading={starting === 'check'} disabled={running || unavailable}>Check identity</Button></div></div>
+      <dl className="identity-grid"><div><dt>Organization ID</dt><dd className="mono">{customer.expectedOrgId}</dd></div>{customer.lastCheck?.observedOrgId && customer.lastCheck.observedOrgId !== customer.expectedOrgId && <div><dt>Observed org</dt><dd className="mono">{customer.lastCheck.observedOrgId}</dd></div>}<div className="endpoint-field"><dt>MCP endpoint</dt><dd className="mono">{customer.serverUrl}</dd></div><div><dt>Last check</dt><dd>{dateLabel(customer.lastCheck?.checkedAt)}</dd></div></dl>
       {customer.lastCheck?.message && customer.lastCheck.state !== 'verified' && <Notice tone={customer.lastCheck.state === 'unverified' ? 'info' : 'error'}>{customer.lastCheck.message}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       {starting === 'connect' && !runningJob && <Notice>Preparing Glide sign-in…</Notice>}
       {!unavailable && runningJob?.authorizationUrl && <Notice><p>Select this customer’s organization in Glide.</p><Button variant="outline" render={<a href={runningJob.authorizationUrl} target="_blank" rel="noopener noreferrer" />}>Open Glide sign-in</Button></Notice>}
       {latestJob && latestJob.state !== 'complete' && !(latestJob.state === 'running' && runningJob?.authorizationUrl && !unavailable) && latestJob.message !== customer.lastCheck?.message && <div className={`job-status ${latestJob.state === 'failed' ? 'job-failed' : ''}`} role="status">{latestJob.state === 'running' && <RefreshCw className="busy-icon" aria-hidden="true" />}<p>{latestJob.message}</p></div>}
-      <div className="connection-actions"><Button variant={verified ? 'outline' : 'default'} onClick={() => void run('connect')} loading={starting === 'connect'} disabled={running || unavailable}>{verified ? 'Reconnect Glide' : 'Connect Glide'}</Button><Button variant={verified ? 'default' : 'outline'} onClick={() => void run('check')} loading={starting === 'check'} disabled={running || unavailable}>Check identity</Button></div>
     </section>
     <ProjectBinding customer={customer} bindings={bindings} unavailable={unavailable || running} refresh={refresh} announce={announce} />
     <details className="usage-help"><summary>Client setup and connection details</summary><div><p>Open a bound folder in T3 Code, Claude Code, or Codex. Start a new session after applying config. Approve project trust and MCP access in the client, then check the customer identity.</p><dl className="technical-details"><div><dt>Customer ID</dt><dd className="mono">{customer.id}</dd></div><div><dt>OAuth callback port</dt><dd className="mono">{customer.callbackPort}</dd></div>{latestJob && <div><dt>Last job</dt><dd>{latestJob.state}: {latestJob.message}</dd></div>}</dl></div></details>
