@@ -57,7 +57,7 @@ Chromium checked the built interface with synthetic picker responses at 1440px a
 
 ## Compact utility interface (2026-10-19)
 
-The current view reuses the owned Button, Input, Badge, and Base UI Dialog. It adds no dependency, external component, or font. App.tsx composes those primitives with the existing native form, select, checkbox, links, and details elements. The document title is “MCP customer router.”
+This revision reused the owned Button, Input, Badge, and Base UI Dialog. It added no dependency, external component, or font. App.tsx composed those primitives with the existing native form, select, checkbox, links, and details elements. The document title at this revision was “MCP customer router.”
 
 Removed the logo, avatar initials, eyebrow labels, onboarding steps, large card shell, persistent setup paragraphs, and duplicate success messages. The sidebar shows search, business filter, customer name, and status. Business text appears when it differs from the customer name. Details show the expected organization, endpoint, latest check, and actions. A different observed organization stays visible with the mismatch error. Saved project paths and config review remain in the main flow. Client instructions, customer ID, callback port, and the latest job are inside a native disclosure. No service state was added.
 
@@ -77,3 +77,20 @@ Removed the logo, avatar initials, eyebrow labels, onboarding steps, large card 
 - The existing sign-in regression passed: preparation state, safe anchor attributes, keyboard focus, reload, unavailable/completed/failed states, and identity checks without sign-in prompts. No Connect action or external request ran.
 - Screenshots were reviewed at 1440px and 320px. The page stayed within 320px; long paths wrap and generated code scrolls inside its panel. A wrapped status label needed a height adjustment, which is included.
 - Evidence: `/private/tmp/router-compact-ui-results.json`, `/private/tmp/router-compact-folder-ui-results.json`, `/private/tmp/router-compact-sign-in-ui-results.json`, and `/private/tmp/router-compact-{desktop,320-detail,320-list,320-dialog}.png`. Fixture scripts use synthetic records and intercept every network request. These checks establish frontend behavior. Native OAuth, customer writes, and server lifecycle were outside these checks.
+
+## Glide branding (2026-10-19)
+
+The user requested the Glide/G3 identity while retaining the compact utility layout. The header now reads “Glide / MCP router,” with the Glide mark also used as the favicon. The existing COSS/Base UI primitives receive warm neutral surfaces, aqua primary actions with black text, rounded buttons, and G3 semantic status colors. No API, authentication, project-binding, or routing behavior changed.
+
+References were read from the tracked `glideapps/g3` checkout at commit `d2c4ec87a0b14c794986377c93ec44574b462317`:
+
+- `packages/ui/src/colors.css`: warm neutrals, aqua, and semantic color ramps.
+- `packages/ui/src/theme.css`: light theme mapping, 575 semibold, and heading tracking.
+- `packages/ui/src/components/button.tsx`: aqua primary with black text and a 25% stronger-color hover mix; rounded button shape.
+- `packages/ui/src/components/logo.tsx`: the 22px circle and painted inverse glyphs, adapted as the local `web/public/glide-mark.svg` asset.
+
+The router keeps its existing density and system font. G3's BootonVF font binary and private component implementations were not copied. The Glide mark remains Glide's brand asset; this repository's MIT license does not grant rights to the mark. See [Glide's terms](https://www.glideapps.com/legal/terms). There are no remote image or font requests.
+
+Verification: the web TypeScript check and Vite build passed. All three existing synthetic browser suites passed at desktop and 320px widths, covering search/filtering, navigation, modal focus, config warning acknowledgment, identity gating, folder selection states, and sign-in link states. The new mark loaded from the local build. Screenshots of the narrow list, detail, and dialog were inspected; no horizontal overflow or browser errors occurred. Independent source review found no defects. Black text on the aqua primary has a 14.71:1 contrast ratio. The live local dashboard was reloaded and its customer detail and Add customer dialog were inspected without saving or connecting.
+
+Evidence: `/private/tmp/router-glide-{ui,folder-ui,sign-in-ui}-results.json` and `/private/tmp/router-glide-{desktop,320-detail,320-list,320-dialog}.png`. Synthetic tests intercept all requests and do not change customer data.

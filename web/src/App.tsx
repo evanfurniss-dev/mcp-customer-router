@@ -77,7 +77,10 @@ export default function App() {
     <a className="skip-link" href="#main-content" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus() }}>Skip to customer details</a>
     <div className="app-shell">
       <header className="app-header">
-        <a href="#" className="app-title">MCP customer router</a>
+        <a href="#" className="app-title" aria-label="Glide MCP router">
+          <img src="/glide-mark.svg" width="26" height="26" alt="" />
+          <span className="brand-name">Glide</span><span className="app-name">MCP router</span>
+        </a>
         <Button variant="outline" onClick={() => void load(true)} loading={loading}>Refresh</Button>
       </header>
       <div className={`workspace-layout ${route ? 'has-detail' : ''}`}>

@@ -1,0 +1,6 @@
+<!-- Glide brand mark. Source and usage notes: docs/UI-SOURCES.md. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22" fill="none">
+  <rect width="22" height="22" rx="11" fill="#000"/>
+  <path d="M3.95312 11.7047L11.7047 3.95312V7.75844C11.7047 9.93789 9.93789 11.7047 7.75844 11.7047H3.95312Z" fill="#fff"/>
+  <path d="M10.2953 14.2416C10.2953 12.0621 12.0621 10.2953 14.2416 10.2953H18.0469L10.2953 18.0469V14.2416Z" fill="#fff"/>
+</svg>
