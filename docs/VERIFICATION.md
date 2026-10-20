@@ -1,6 +1,6 @@
 # MVP verification
 
-Verified on 2026-10-18. This fork starts at mcp-remote commit `71cadf3aaa935608d5e14d472a59e9583ebb9505`.
+Verified on 2026-10-19. This fork starts at mcp-remote commit `71cadf3aaa935608d5e14d472a59e9583ebb9505`.
 
 ## Acceptance criteria
 
@@ -10,7 +10,7 @@ The build must save one authorization per customer, share it between Claude Code
 
 | Check                  | Result                                                                                                                                                                                                                                                                                                 |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Automated suite        | 644 tests passed across 27 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
+| Automated suite        | 663 tests passed across 28 files. This includes the inherited upstream suite and router tests.                                                                                                                                                                                                         |
 | Static checks          | Root formatting, lint, TypeScript and Knip passed. Frontend strict TypeScript passed.                                                                                                                                                                                                                  |
 | Build                  | Bridge and dashboard production builds passed.                                                                                                                                                                                                                                                         |
 | Shared authorization   | Two MCP clients used the same temporary customer store, with one refresh and independent protocol handshakes.                                                                                                                                                                                          |
@@ -83,6 +83,20 @@ Three comparable native Claude checks through T3's bundled Agent SDK returned th
 The added automated tests cover held identity verification, discovery response before release, successful handshake and tool execution after release, mismatched identity with zero forwarded user requests, queued cancellation, bounded input, and shutdown. The full 644-test suite, static checks, Knip and bridge build passed. An independent code review found no blocking defect.
 
 These native checks used only the customer server and sent no user prompt or model request. They do not prove tool selection in a normal T3 session with all configured servers. T3 0.0.45 marks its session ready before waiting for MCP inventory. A fresh T3 chat in the bound project is still required to verify the user path. Timing differences between whole runs do not establish a general latency improvement. Long-running connection durability was not tested.
+
+## Persistent macOS service and compact UI
+
+The dashboard now supports `service install`, `status`, `start`, `stop`, `restart`, and `uninstall`, plus `open`. Installation creates a per-user LaunchAgent and a `~/.local/bin/mcp-customer-router` shortcut. The job uses absolute executable paths, binds to loopback, starts at login, and uses `KeepAlive` to recover after exits. Stop disables the job until an explicit start. Removal preserves customer data. An occupied port, unrelated file or symbolic link blocks installation without killing its owner or overwriting the file.
+
+The implementation follows the installed macOS 27 `launchctl` and `launchd.plist` manuals. Apple's [LaunchAgent guide](https://developer.apple.com/library/archive/documentation/MacOSX/Conceptual/BPSystemStartup/Chapters/CreatingLaunchdJobs.html) describes the per-user login lifecycle; that guide is archived, so current local manual behavior takes precedence. This service is available while the user is logged in and the Mac is awake. It does not provide cloud execution.
+
+Nineteen focused tests cover command ordering, readiness, literal paths and shell arguments, private file modes, refusal of unrelated files and occupied ports, and preserved customer data. Live testing found that `bootout` can return before macOS removes the service. The implementation now waits for removal before starting it again; a regression test holds that transition and verifies that startup cannot proceed early.
+
+On the user's Mac, installation, CLI status, stop, start and restart passed. The same CLI worked with a clean environment containing only HOME and a minimal PATH. The plist passed `plutil -lint`; its mode and log modes were 0600, the log directory and shortcut modes 0700. A controlled SIGTERM to the idle managed service produced a new listening process and healthy HTTP response after approximately 330 ms, without issuing a manual start. All five customer records remained present and the registry SHA-256 was unchanged. There were no model requests, new sign-ins or customer data writes. Login after a full reboot was not tested.
+
+The UI removes eyebrow headings, avatars, onboarding steps and repeated descriptions. It uses compact neutral lists and forms; extra setup details are collapsed. Duplicate business names and matching observed organization IDs are omitted. A mismatch still shows both IDs. All connection, folder-picker, configuration-warning and removal protections remain. The built page was inspected in the real in-app browser against the managed service. Synthetic browser tests cover the form and modal paths, search and filter state, sign-in lifecycle, configuration safeguards and folder selection at desktop and 320px widths. See [UI-SOURCES.md](UI-SOURCES.md) for source and evidence details.
+
+The full suite passed 663 tests across 28 files. Formatting, lint, TypeScript, Knip, bridge build and web build passed. The running service uses the built local checkout; moving or deleting that checkout requires reinstalling the service and updating any project configuration that references it.
 
 ## Live acceptance still required
 

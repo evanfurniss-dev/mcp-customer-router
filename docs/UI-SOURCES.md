@@ -1,6 +1,6 @@
 # Dashboard UI sources and verification
 
-Reviewed 2026-10-18. This document covers `web/` only.
+Reviewed 2026-10-19. This document covers `web/` only.
 
 ## Foundation
 
@@ -12,11 +12,11 @@ There were no existing frontend primitives in this repository. COSS and shadcn B
 
 | Owned file                          | Source inspected                                                                                                | Alternative inspected                                                      | Adaptation                                                                                                                                                                                 |
 | ----------------------------------- | --------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `web/src/components/ui/button.tsx`  | [COSS Button](https://coss.com/ui/docs/components/button), [registry source](https://coss.com/ui/r/button.json) | [shadcn Base UI Button](https://ui.shadcn.com/docs/components/base/button) | Local imports; visible labels; 40px minimum button height; original loading and disabled behavior.                                                                                         |
+| `web/src/components/ui/button.tsx`  | [COSS Button](https://coss.com/ui/docs/components/button), [registry source](https://coss.com/ui/r/button.json) | [shadcn Base UI Button](https://ui.shadcn.com/docs/components/base/button) | Local imports; visible labels; 34px desktop controls and 44px coarse-pointer controls; original loading and disabled behavior.                                                             |
 | `web/src/components/ui/input.tsx`   | [COSS Input](https://coss.com/ui/docs/components/input), [registry source](https://coss.com/ui/r/input.json)    | [shadcn Base UI Input](https://ui.shadcn.com/docs/components/base/input)   | Native field labels and descriptions; touch sizing; clear focus state.                                                                                                                     |
 | `web/src/components/ui/dialog.tsx`  | [COSS Dialog](https://coss.com/ui/docs/components/dialog), [registry source](https://coss.com/ui/r/dialog.json) | [shadcn Base UI Dialog](https://ui.shadcn.com/docs/components/base/dialog) | Base UI modal, title, description, Escape and focus handling retained. Native scrolling replaces the extra ScrollArea component. Visible Cancel controls; no icon-only close control used. |
-| `web/src/components/ui/badge.tsx`   | [COSS Badge](https://coss.com/ui/docs/components/badge), [registry source](https://coss.com/ui/r/badge.json)    | [shadcn Base UI Badge](https://ui.shadcn.com/docs/components/base/badge)   | Text and decorative icons identify every state; color carries no unique meaning.                                                                                                           |
-| `web/src/components/ui/card.tsx`    | [COSS Card](https://coss.com/ui/docs/components/card), [registry source](https://coss.com/ui/r/card.json)       | [shadcn Base UI Card](https://ui.shadcn.com/docs/components/base/card)     | Local imports, compact connection panel.                                                                                                                                                   |
+| `web/src/components/ui/badge.tsx`   | [COSS Badge](https://coss.com/ui/docs/components/badge), [registry source](https://coss.com/ui/r/badge.json)    | [shadcn Base UI Badge](https://ui.shadcn.com/docs/components/base/badge)   | Text identifies every state; color carries no unique meaning. Labels can wrap.                                                                                                             |
+| `web/src/components/ui/card.tsx`    | [COSS Card](https://coss.com/ui/docs/components/card), [registry source](https://coss.com/ui/r/card.json)       | [shadcn Base UI Card](https://ui.shadcn.com/docs/components/base/card)     | Retained local primitive; the current detail view uses plain sections.                                                                                                                     |
 | `web/src/components/ui/spinner.tsx` | [COSS Spinner registry](https://coss.com/ui/r/spinner.json)                                                     | shadcn Button spinner composition                                          | Used by the owned COSS button. Reduced-motion rules suppress rotation.                                                                                                                     |
 
 Source pages and their code/variant contracts were inspected live. Registry JSON supplied the exact copied source. Installation used manual source copying, then `pnpm --dir web install`; no registry CLI changed the root project. The native business select, checkbox, labels, form, and details elements use platform semantics. Customer rows and detail sections compose these owned primitives.
@@ -35,7 +35,7 @@ Hash links open customer records and preserve search/filter state. A project pre
 
 **Choose folder** reuses the local COSS Button and Input in `web/src/App.tsx`. It opens the native macOS folder dialog through the authenticated local API. A successful choice fills the exact returned path and clears an older preview. Cancel keeps the path and preview. Project controls are disabled while the dialog is open; focus returns to the chooser button afterward. Manual path entry remains available. Choosing a folder does not apply settings.
 
-## Verification
+## Initial verification (2026-10-18)
 
 - `pnpm --dir web install`: passed.
 - `pnpm --dir web build`: passed; strict TypeScript check and Vite production build write `web/dist`.
@@ -54,3 +54,26 @@ The built interface was checked with intercepted synthetic API responses in Chro
 ### Folder-picker browser checks
 
 Chromium checked the built interface with synthetic picker responses at 1440px and 320px widths. Keyboard activation, focus restoration, cancellation preserving the current preview, selection clearing the old preview, disabled Apply during selection, error retry, and exact path submission passed. The selected fixture path ends in a space to detect accidental trimming. No Apply or Glide request was made. Evidence: `/private/tmp/router-folder-ui-results.json` and `/private/tmp/router-folder-{desktop,mobile}.png`. These intercepted responses verify frontend behavior; native dialog verification is recorded separately in `VERIFICATION.md`.
+
+## Compact utility interface (2026-10-19)
+
+The current view reuses the owned Button, Input, Badge, and Base UI Dialog. It adds no dependency, external component, or font. App.tsx composes those primitives with the existing native form, select, checkbox, links, and details elements. The document title is “MCP customer router.”
+
+Removed the logo, avatar initials, eyebrow labels, onboarding steps, large card shell, persistent setup paragraphs, and duplicate success messages. The sidebar shows search, business filter, customer name, and status. Business text appears when it differs from the customer name. Details show the expected organization, endpoint, latest check, and actions. A different observed organization stays visible with the mismatch error. Saved project paths and config review remain in the main flow. Client instructions, customer ID, callback port, and the latest job are inside a native disclosure. No service state was added.
+
+### Foundation and component review
+
+- Neutral CSS tokens, system fonts, compact spacing, and explicit text states replace decorative styling. The status badge grows when its label wraps.
+- Native customer links retain the hash route and search/filter state. Record and preview headings receive focus after navigation. Focus outlines and forced-color support remain.
+- The Add customer dialog retains field labels, length limits, keyboard containment, Escape, and return focus. Destructive confirmation and blocked removal for bound projects remain.
+- Config review keeps generated snippets, change indicators, identity requirements, and warning acknowledgment. Native folder selection retains exact paths, cancellation, error recovery, and focus return.
+- Existing connection jobs retain loading/disabled states and sign-in links. Failed refreshes disable mutations and hide the sign-in URL. No permission or API contract changed.
+
+### Verification
+
+- `pnpm --dir web build` passed the TypeScript check and Vite production build.
+- Chromium ran intercepted synthetic responses against the built interface. Search, business filtering, hash navigation, preserved filters, heading focus, modal keyboard containment/Escape/return focus, warning acknowledgment, identity gating, and removal protection passed. The fixture made two intercepted preview requests and no customer writes.
+- The existing folder-picker regression passed with the new labels: keyboard use, cancellation preserving the preview, selection clearing stale preview, exact trailing-space paths, disabled Apply during selection, focus restoration, and error retry.
+- The existing sign-in regression passed: preparation state, safe anchor attributes, keyboard focus, reload, unavailable/completed/failed states, and identity checks without sign-in prompts. No Connect action or external request ran.
+- Screenshots were reviewed at 1440px and 320px. The page stayed within 320px; long paths wrap and generated code scrolls inside its panel. A wrapped status label needed a height adjustment, which is included.
+- Evidence: `/private/tmp/router-compact-ui-results.json`, `/private/tmp/router-compact-folder-ui-results.json`, `/private/tmp/router-compact-sign-in-ui-results.json`, and `/private/tmp/router-compact-{desktop,320-detail,320-list,320-dialog}.png`. Fixture scripts use synthetic records and intercept every network request. These checks establish frontend behavior. Native OAuth, customer writes, and server lifecycle were outside these checks.

@@ -7,4 +7,4 @@ if [[ ! -f dist/router-cli.js || ! -f web/dist/index.html ]]; then
   read -r '?Press Return to close.'
   exit 1
 fi
-exec node dist/router-cli.js dashboard --open
+exec node dist/router-cli.js service install --open

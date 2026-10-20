@@ -67,6 +67,9 @@ export function createRouterServer(options: ServerOptions) {
     next()
   })
 
+  app.get('/api/health', (_request, response) => {
+    response.json({ service: 'mcp-customer-router' })
+  })
   app.get('/api/session', (_request, response) => {
     response.json({ token })
   })

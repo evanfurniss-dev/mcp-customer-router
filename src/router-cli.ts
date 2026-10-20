@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util'
 import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import open from 'open'
@@ -8,6 +9,7 @@ import { RegistryStore, defaultHome } from './router/registry'
 import { createRouterServer } from './router/server'
 import { connectionEntry, connectionEnvironment, forwardSignals, runConnectionCheck } from './router/jobs'
 import { UserError } from './router/types'
+import { RouterService, stableNodePath } from './router/service'
 
 async function main() {
   const { values, positionals } = parseArgs({
@@ -28,8 +30,39 @@ async function main() {
   const [command = 'dashboard'] = positionals
   if (values.help) {
     console.log(
-      `Customer MCP Router\n\n  dashboard [--open] [--port 4773]    Open customer connection management\n  list                              List saved customers and project bindings\n  add --name NAME --business LABEL --org ID [--url URL]\n  connect --customer ID              Authorize and verify a Glide connection\n  check --customer ID                Check a saved connection without a new sign-in\n  serve --customer ID --project PATH Start the project-bound MCP bridge\n\nAll commands accept --home PATH. Customer data defaults to ~/.mcp-customer-router.\nProject settings are previewed and applied from the dashboard.`,
+      `Customer MCP Router\n\n  service install [--open]           Start at Mac login; install the CLI shortcut\n  service status                    Show service and dashboard status\n  service start|stop|restart         Control the background dashboard\n  service uninstall                 Remove autostart; keep customer data\n  open                              Start the installed service and open its UI\n  dashboard [--open] [--port 4773]    Run the dashboard in this terminal\n  list                              List saved customers and project bindings\n  add --name NAME --business LABEL --org ID [--url URL]\n  connect --customer ID              Authorize and verify a Glide connection\n  check --customer ID                Check a saved connection without a new sign-in\n  serve --customer ID --project PATH Start the project-bound MCP bridge\n\nAll commands accept --home PATH. Customer data defaults to ~/.mcp-customer-router.\nService commands use the installed --home and --port (default 4773).\nProject settings are previewed and applied from the dashboard.`,
     )
+    return
+  }
+  if (command === 'service' || command === 'open') {
+    if (process.platform !== 'darwin' || !process.getuid || process.getuid() === 0) {
+      throw new UserError('Service commands require a signed-in macOS user. Run dashboard in a terminal on other systems.')
+    }
+    const action = command === 'open' ? 'start' : positionals[1]
+    if (!['install', 'status', 'start', 'stop', 'restart', 'uninstall'].includes(action))
+      throw new UserError('Use service install, status, start, stop, restart, or uninstall.')
+    const service = new RouterService({
+      cliPath: fileURLToPath(import.meta.url),
+      nodePath: await stableNodePath(),
+      dataHome: values.home,
+      port: Number(values.port ?? 4773),
+    })
+    if (action === 'status') {
+      console.log(JSON.stringify(await service.status(), null, 2))
+      return
+    }
+    await service[action as 'install' | 'start' | 'stop' | 'restart' | 'uninstall']()
+    console.log(
+      action === 'stop'
+        ? 'Service stopped. Start it with: mcp-customer-router service start'
+        : action === 'uninstall'
+          ? 'Service removed. Customer data retained.'
+          : `Customer MCP Router: ${service.url}`,
+    )
+    if (action === 'install') console.log(`CLI: ${service.shortcut}`)
+    if ((command === 'open' || values.open) && ['install', 'start', 'restart'].includes(action)) {
+      await open(service.url).catch(() => console.error(`Open ${service.url} in your browser.`))
+    }
     return
   }
   const store = new RegistryStore(values.home ?? defaultHome())

@@ -12,19 +12,31 @@ Requires Node.js 22.12 or newer and pnpm.
 pnpm install --frozen-lockfile
 pnpm --dir web install --frozen-lockfile
 pnpm build
-pnpm start
+node dist/router-cli.js service install --open
 ```
 
-On a Mac with dependencies already installed and the build complete, open **Start Customer MCP Router.command** in this folder. The dashboard runs at `http://127.0.0.1:4773`. Keep its terminal open while managing connections. Start it from this launcher or your own terminal so macOS can open the browser; a coding-agent process sandbox can block that action. Existing MCP client processes do not depend on the dashboard remaining open.
+On macOS, this installs a user LaunchAgent and the command `~/.local/bin/mcp-customer-router`. The dashboard starts at login, stays available at `http://127.0.0.1:4773`, and restarts after an exit. You can close Terminal and the browser. Opening **Start Customer MCP Router.command** installs or starts the same service and opens the dashboard.
+
+```sh
+mcp-customer-router open
+mcp-customer-router service status
+mcp-customer-router service restart
+```
+
+If `~/.local/bin` is not on your shell's PATH, use `~/.local/bin/mcp-customer-router open`. The service uses an absolute Node path and does not depend on your shell's PATH. Installation refuses an occupied port and leaves the existing process alone. Stop an older foreground dashboard before installing.
+
+`service stop` stops the dashboard and disables startup at login until `service start`. `service uninstall` removes the LaunchAgent and CLI shortcut while preserving customer data. Logs are in `~/.mcp-customer-router/logs/`. Restarting the service stops active dashboard checks and sign-in jobs; it does not restart independent MCP bridges already owned by Claude or Codex.
+
+The service runs while your macOS user is logged in. Work pauses during sleep; it is not an always-on cloud host. For a foreground process, development, or another operating system, use `node dist/router-cli.js dashboard --open`.
 
 ## Connect a customer
 
 1. Select **Add customer**. Enter its name and business label. Copy its organization ID from its Glide URL, such as the ID after `/o/` in `https://os.glideapps.dev/o/ORG_ID/projects`.
-2. Open the customer and select **Connect**. If a browser does not open, select **Open Glide sign-in** in the active job. Finish Glide sign-in and choose that organization. The router reads `project_list` and checks its server-owned organization citation before showing **Verified**.
-3. Select **Choose folder** to pick the customer's local project in the macOS folder dialog, or enter its full path. Select **Review settings** to preview the generated Claude and Codex settings. Review any warnings about existing Glide connections, then apply.
+2. Open the customer and select **Connect Glide**. If a browser does not open, select **Open Glide sign-in** in the active job. Finish Glide sign-in and choose that organization. The router reads `project_list` and checks its server-owned organization citation before showing **Verified**.
+3. Select **Choose folder** to pick the customer's local project in the macOS folder dialog, or enter its full path. Select **Preview config** to preview the generated Claude and Codex settings. Review any warnings about existing Glide connections, then select **Apply config**.
 4. Open a fresh Claude Code or Codex session in that project. Codex requires the project to be trusted. Claude may ask to approve the project's MCP entry. These are local project approvals; they do not repeat Glide sign-in. In T3, open that project and start a fresh provider session.
 
-**Connect** starts a fresh authorization for only the selected customer. It invalidates older router sessions for that customer. **Check connection** reuses the saved grant and never opens a new sign-in. Refresh of an existing grant happens automatically.
+**Connect Glide** and **Reconnect Glide** start a fresh authorization for only the selected customer. It invalidates older router sessions for that customer. **Check identity** reuses the saved grant and never opens a new sign-in. Refresh of an existing grant happens automatically.
 
 Project settings use absolute paths to this checkout and Node. If you move the checkout or replace the Node installation, review and update those entries. Existing differing `customer-glide` entries are refused to prevent silent rebinding. A separate Git worktree needs its own binding; a copied entry still points at the original checkout and must be reviewed before reuse.
 
@@ -45,19 +57,20 @@ This provides saved-connection separation under one operating-system account. An
 
 Existing global or project Glide connections can still be available to agents. The router reports detected entries for review and does not disable them automatically. T3's own provider override settings and organization policies can also affect effective configuration. Verify the active MCP list in each client.
 
-The dashboard must be open to manage customers. Work runs on the Mac and stops when its execution process is unavailable. This release has no hosted execution or scheduler. Credentials use private files, not Mac Keychain. Removing a customer entry retains its protected credential files for recovery and does not revoke the grant at Glide; removal is blocked while projects remain bound.
+The dashboard service must be running to manage customers in the browser. Each client starts its own customer bridge, which can run with the dashboard stopped. Work runs on the Mac and stops when its execution process is unavailable. This release has no hosted execution or scheduler. Credentials use private files, not Mac Keychain. Removing a customer entry retains its protected credential files for recovery and does not revoke the grant at Glide; removal is blocked while projects remain bound.
 
 ## Commands
 
 ```sh
 node dist/router-cli.js --help
-node dist/router-cli.js list
+mcp-customer-router list
+mcp-customer-router add --name "Customer" --business "Business" --org ORG_ID
+mcp-customer-router connect --customer CUSTOMER_UUID
+mcp-customer-router check --customer CUSTOMER_UUID
 node dist/router-cli.js dashboard --port 4774
-node dist/router-cli.js connect --customer CUSTOMER_UUID
-node dist/router-cli.js check --customer CUSTOMER_UUID
 ```
 
-Use `--home /absolute/path` for an isolated registry. Keep data directories outside Git. The `serve` command is generated into client configuration and requires a matching saved project binding and project working directory.
+Use `--home /absolute/path` for an isolated registry. A user can install one dashboard service; service commands must use its installed `--home` and `--port`. Keep data directories outside Git. The `serve` command is generated into client configuration and requires a matching saved project binding and project working directory.
 
 ## Verification
 

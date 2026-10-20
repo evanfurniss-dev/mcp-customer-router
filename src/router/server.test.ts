@@ -129,6 +129,8 @@ describe('local dashboard API', () => {
 
   it('rejects cross-site requests, hostile Host headers, and missing session tokens', async () => {
     const { origin, store } = await setup()
+    expect(await (await fetch(`${origin}/api/health`)).json()).toEqual({ service: 'mcp-customer-router' })
+    expect((await fetch(`${origin}/api/health`, { headers: { origin: 'https://evil.invalid' } })).status).toBe(403)
     expect((await fetch(`${origin}/api/state`)).status).toBe(403)
     expect((await fetch(`${origin}/api/session`, { headers: { origin: 'https://evil.invalid' } })).status).toBe(403)
     const hostileHostStatus = await new Promise<number | undefined>((resolve, reject) => {
