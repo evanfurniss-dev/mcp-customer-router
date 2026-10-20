@@ -7,9 +7,10 @@ import path from 'node:path'
 import open from 'open'
 import { RegistryStore, defaultHome } from './router/registry'
 import { createRouterServer } from './router/server'
-import { connectionEntry, connectionEnvironment, forwardSignals, runConnectionCheck } from './router/jobs'
+import { connectionEnvironment, forwardSignals, runConnectionCheck } from './router/jobs'
 import { UserError } from './router/types'
-import { RouterService, stableNodePath } from './router/service'
+import { RouterService } from './router/service'
+import { resolveRuntimePaths } from './router/runtime-paths'
 
 async function main() {
   const { values, positionals } = parseArgs({
@@ -25,6 +26,7 @@ async function main() {
       org: { type: 'string' },
       url: { type: 'string' },
       help: { type: 'boolean', short: 'h' },
+      version: { type: 'boolean', short: 'v' },
     },
   })
   const [command = 'dashboard'] = positionals
@@ -34,6 +36,13 @@ async function main() {
     )
     return
   }
+  if (values.version) {
+    const metadata = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8')) as { version: unknown }
+    if (typeof metadata.version !== 'string') throw new UserError('The router package version is missing. Reinstall the router.')
+    console.log(metadata.version)
+    return
+  }
+  const runtime = resolveRuntimePaths(fileURLToPath(import.meta.url))
   if (command === 'service' || command === 'open') {
     if (process.platform !== 'darwin' || !process.getuid || process.getuid() === 0) {
       throw new UserError('Service commands require a signed-in macOS user. Run dashboard in a terminal on other systems.')
@@ -42,8 +51,8 @@ async function main() {
     if (!['install', 'status', 'start', 'stop', 'restart', 'uninstall'].includes(action))
       throw new UserError('Use service install, status, start, stop, restart, or uninstall.')
     const service = new RouterService({
-      cliPath: fileURLToPath(import.meta.url),
-      nodePath: await stableNodePath(),
+      cliPath: runtime.cliPath,
+      nodePath: runtime.nodePath,
       dataHome: values.home,
       port: Number(values.port ?? 4773),
     })
@@ -133,7 +142,7 @@ async function main() {
     if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
       throw new UserError('Start this connection from its bound project directory.', 403)
     }
-    const child = spawn(process.execPath, [connectionEntry(), '--mode', 'serve'], {
+    const child = spawn(runtime.nodePath, [runtime.connectionPath, '--mode', 'serve'], {
       cwd: canonicalProject,
       env: connectionEnvironment(customer, store.authDir(customer.id)),
       stdio: 'inherit',

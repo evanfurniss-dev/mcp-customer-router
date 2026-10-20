@@ -15,12 +15,13 @@
   "type": "module",
   "files": [
     "dist",
+    "web/dist",
+    "web/licenses",
+    "docs",
     "README.md",
     "LICENSE"
   ],
   "bin": {
-    "mcp-remote": "dist/proxy.js",
-    "mcp-remote-client": "dist/client.js",
     "mcp-customer-router": "dist/router-cli.js"
   },
   "scripts": {
@@ -36,6 +37,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "build:bridge": "tsup",
+    "release:package": "node scripts/package-release.mjs",
+    "release:smoke": "node scripts/smoke-release.mjs",
     "start": "node dist/router-cli.js dashboard --open",
     "check:router": "vitest run src/router"
   },

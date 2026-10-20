@@ -1,8 +1,8 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { fileURLToPath } from 'node:url'
 import { RegistryStore } from './registry'
 import { UserError, type ConnectionCheck, type ConnectionJob, type Customer } from './types'
+import { resolveRuntimePaths } from './runtime-paths'
 
 export function connectionEnvironment(customer: Customer, authDir: string): NodeJS.ProcessEnv {
   const environment: NodeJS.ProcessEnv = {}
@@ -23,10 +23,6 @@ export function connectionEnvironment(customer: Customer, authDir: string): Node
   environment.CUSTOMER_ROUTER_SPEC = JSON.stringify({ customer, authDir })
   environment.MCP_REMOTE_CONFIG_DIR = authDir
   return environment
-}
-
-export function connectionEntry(): string {
-  return fileURLToPath(new URL('./router-connection.js', import.meta.url))
 }
 
 type JobRunner = (
@@ -61,7 +57,9 @@ function authorizationUrl(customer: Customer, value: string): string | undefined
 
 export const runConnectionCheck: JobRunner = (customer, mode, authDir, signal, onAuthorizationReady = async () => {}) =>
   new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [connectionEntry(), '--mode', mode], {
+    const runtime = resolveRuntimePaths()
+    const child = spawn(runtime.nodePath, [runtime.connectionPath, '--mode', mode], {
+      cwd: authDir,
       env: connectionEnvironment(customer, authDir),
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       signal,

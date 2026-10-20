@@ -55,14 +55,6 @@ async function ready(port: number): Promise<boolean> {
   }
 }
 
-export async function stableNodePath(): Promise<string> {
-  const actual = await fs.realpath(process.execPath)
-  for (const candidate of ['/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node']) {
-    if ((await fs.realpath(candidate).catch(() => '')) === actual) return candidate
-  }
-  return process.execPath
-}
-
 interface ServiceOptions {
   cliPath: string
   nodePath: string
@@ -124,7 +116,7 @@ export class RouterService {
 <plist version="1.0"><dict>
 <key>Label</key><string>${label}</string>
 <key>ProgramArguments</key><array>${args.map((arg) => `<string>${xml(arg)}</string>`).join('')}</array>
-<key>WorkingDirectory</key><string>${xml(path.dirname(this.options.cliPath))}</string>
+<key>WorkingDirectory</key><string>${xml(this.dataHome)}</string>
 <key>EnvironmentVariables</key><dict><key>HOME</key><string>${xml(this.home)}</string><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>ThrottleInterval</key><integer>10</integer><key>ExitTimeOut</key><integer>10</integer>

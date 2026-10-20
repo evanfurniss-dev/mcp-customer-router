@@ -12,3 +12,4 @@ test-results/
 .DS_Store
 *.log
 .mcp-customer-router/
+release/

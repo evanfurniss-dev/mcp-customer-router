@@ -48,7 +48,7 @@ describe('per-user dashboard service', () => {
     const plist = JSON.parse(stdout)
     expect(plist.Label).toBe('dev.evanfurniss.mcp-customer-router')
     expect(plist.ProgramArguments).toEqual([f.nodePath, f.cliPath, 'dashboard', '--home', f.dataHome, '--port', '4773'])
-    expect(plist.WorkingDirectory).toBe(path.dirname(f.cliPath))
+    expect(plist.WorkingDirectory).toBe(f.dataHome)
     expect(plist.EnvironmentVariables.HOME).toBe(f.userHome)
     expect(plist.KeepAlive).toBe(true)
     expect(plist.Umask).toBe(0o077)

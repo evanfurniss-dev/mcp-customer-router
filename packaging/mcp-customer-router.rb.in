@@ -1,0 +1,62 @@
+require "json"
+
+class McpCustomerRouter < Formula
+  desc "Share separate Glide customer connections across Claude Code and Codex"
+  homepage "https://github.com/evanfurniss-dev/mcp-customer-router"
+  url "https://github.com/evanfurniss-dev/mcp-customer-router/releases/download/router-v@@VERSION@@/mcp-customer-router-@@VERSION@@.tar.gz"
+  version "@@VERSION@@"
+  sha256 "@@SHA256@@"
+  license "MIT"
+
+  depends_on :macos
+  depends_on "node"
+
+  def install
+    libexec.install Dir["*", ".[!.]*"].reject { |entry| [".", ".."].include?(entry) }
+    (libexec/"dist/install-paths.json").write JSON.pretty_generate(
+      nodePath: (Formula["node"].opt_bin/"node").to_s,
+      cliPath: (opt_libexec/"dist/router-cli.js").to_s,
+    )
+    (bin/"mcp-customer-router").write <<~SH
+      #!/bin/sh
+      exec "#{Formula["node"].opt_bin}/node" "#{opt_libexec}/dist/router-cli.js" "$@"
+    SH
+  end
+
+  def caveats
+    <<~EOS
+      Start the dashboard at login and open it:
+        mcp-customer-router service install --open
+
+      After an upgrade:
+        mcp-customer-router service restart
+      Start fresh Claude Code and Codex sessions to load the new bridge.
+
+      Before uninstalling:
+        mcp-customer-router service uninstall
+      Customer data stays in ~/.mcp-customer-router.
+    EOS
+  end
+
+  test do
+    assert_equal version.to_s, shell_output("#{bin}/mcp-customer-router --version").strip
+    state = JSON.parse(shell_output("#{bin}/mcp-customer-router list --home #{testpath}/state"))
+    assert_empty state.fetch("customers")
+    assert_empty state.fetch("bindings")
+    assert_path_exists libexec/"web/dist/index.html"
+    assert_path_exists libexec/"web/licenses/THIRD-PARTY-NOTICES.txt"
+    port = free_port
+    pid = fork do
+      exec bin/"mcp-customer-router", "dashboard", "--home", "#{testpath}/state", "--port", port.to_s
+    end
+    begin
+      sleep 1
+      health = JSON.parse(shell_output("curl --fail --silent --retry 5 --retry-connrefused --retry-delay 1 http://127.0.0.1:#{port}/api/health"))
+      assert_equal "mcp-customer-router", health.fetch("service")
+      assert_match 'id="root"', shell_output("curl --fail --silent http://127.0.0.1:#{port}/")
+    ensure
+      Process.kill("TERM", pid)
+      Process.wait(pid)
+    end
+  end
+end

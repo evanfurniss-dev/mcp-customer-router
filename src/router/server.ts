@@ -1,12 +1,11 @@
 import express, { type NextFunction, type Request, type Response } from 'express'
 import { createServer } from 'node:http'
 import { randomUUID, timingSafeEqual } from 'node:crypto'
-import { fileURLToPath } from 'node:url'
-import fs from 'node:fs/promises'
 import { RegistryStore } from './registry'
 import { ConnectionJobs } from './jobs'
 import { chooseProjectFolder } from './folder-picker'
 import { UserError } from './types'
+import { resolveRuntimePaths } from './runtime-paths'
 import {
   applyProjectConfig,
   rollbackProjectConfig,
@@ -30,19 +29,8 @@ export function createRouterServer(options: ServerOptions) {
   const token = randomUUID()
   const plans = new Map<string, { plan: ProjectConfigPlan; customerId: string; expiresAt: number }>()
   let choosingFolder = false
-  const cliPath = options.cliPath ?? fileURLToPath(new URL('./router-cli.js', import.meta.url))
-  const nodePath = (async () => {
-    // Homebrew's versioned executable can disappear after an upgrade. Prefer its stable link when it is this runtime.
-    const actual = await fs.realpath(process.execPath)
-    for (const candidate of ['/opt/homebrew/bin/node', '/usr/local/bin/node', '/usr/bin/node']) {
-      try {
-        if ((await fs.realpath(candidate)) === actual) return candidate
-      } catch {
-        /* Try the next installed location. */
-      }
-    }
-    return process.execPath
-  })()
+  const runtime = resolveRuntimePaths()
+  const cliPath = options.cliPath ?? runtime.cliPath
 
   app.disable('x-powered-by')
   app.use((request, response, next) => {
@@ -156,7 +144,7 @@ export function createRouterServer(options: ServerOptions) {
       await options.store.customer(customerId)
       let plan: ProjectConfigPlan
       try {
-        plan = await planProjectConfig({ projectPath, customerId, home: options.store.home, cliPath, nodePath: await nodePath })
+        plan = await planProjectConfig({ projectPath, customerId, home: options.store.home, cliPath, nodePath: runtime.nodePath })
       } catch (error) {
         // Adapter errors are intentionally constructed without parser source excerpts.
         throw new UserError(error instanceof Error ? error.message : 'Could not prepare the project settings.')
@@ -206,7 +194,7 @@ export function createRouterServer(options: ServerOptions) {
   app.use('/api', (_request, response) => {
     response.status(404).json({ error: 'Unknown router action.' })
   })
-  const webPath = options.webPath ?? fileURLToPath(new URL('../web/dist/', import.meta.url))
+  const webPath = options.webPath ?? runtime.webPath
   app.use(express.static(webPath, { etag: false, cacheControl: false }))
   app.get('/', (_request, response) => {
     response.status(503).type('text').send('The dashboard is not built. Run pnpm build in the router project, then restart.')
