@@ -1,0 +1,17 @@
+name: Feature request
+description: Suggest an improvement to the router.
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What work would this help you do?
+      description: Describe the current problem and the client or workflow involved.
+    validations:
+      required: true
+  - type: textarea
+    id: change
+    attributes:
+      label: Proposed change
+      description: Explain the result you want and any workaround you use today.
+    validations:
+      required: true

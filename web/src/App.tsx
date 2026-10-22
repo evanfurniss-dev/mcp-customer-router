@@ -5,8 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogClose, DialogDescription, DialogFooter, DialogHeader, DialogPanel, DialogPopup, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { api, errorMessage, post, type Customer, type Job, type Plan, type RouterState } from '@/lib/api'
+import { api, errorMessage, post, type Customer, type Job, type Plan, type RouterState, type ConnectionAction } from '@/lib/api'
 import { useTheme } from '@/lib/theme'
+import { RouterWalkthrough, shouldShowWalkthrough } from '@/components/router-walkthrough'
+import { ClientSetup, useClientChoice } from '@/components/client-setup'
+import { ConnectionReview } from '@/components/connection-review'
 
 const EMPTY: RouterState = { customers: [], bindings: [], jobs: [] }
 function readRoute() { try { return decodeURIComponent(window.location.hash.slice(1)) } catch { return '' } }
@@ -62,6 +65,8 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [business, setBusiness] = useState('')
   const [creating, setCreating] = useState(false)
+  const [walkthroughOpen, setWalkthroughOpen] = useState(shouldShowWalkthrough)
+  const [client, chooseClient] = useClientChoice()
   const [pendingJob, setPendingJob] = useState<string | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const sequence = useRef(0)
@@ -90,7 +95,7 @@ export default function App() {
     const job = data.jobs.find(item => item.id === pendingJob)
     if (job && job.state !== 'running') { setAnnouncement(job.message); setPendingJob(null) }
   }, [data.jobs, pendingJob])
-  useEffect(() => { if (route && loaded) detailHeading.current?.focus() }, [route, loaded])
+  useEffect(() => { if (route && loaded && !walkthroughOpen) detailHeading.current?.focus() }, [route, loaded, walkthroughOpen])
   const customer = data.customers.find(item => item.id === route)
   const businesses = useMemo(() => [...new Set(data.customers.map(item => item.business))].sort(), [data.customers])
   const filtered = data.customers.filter(item => (!business || item.business === business) && `${item.name} ${item.business} ${item.expectedOrgId}`.toLowerCase().includes(query.trim().toLowerCase()))
@@ -106,8 +111,10 @@ export default function App() {
           <span className="brand-name">Glide</span><span className="app-name">MCP router</span>
         </a>
         <div className="header-actions">
+          <ClientSetup client={client} onClientChange={chooseClient} />
           <Button variant="ghost" className="icon-button" onClick={() => void load(true)} loading={loading} aria-label="Refresh" title="Refresh"><RefreshCw aria-hidden="true" /></Button>
           <Button variant="ghost" className="icon-button" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>{theme === 'dark' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}</Button>
+          <RouterWalkthrough open={walkthroughOpen} onOpenChange={setWalkthroughOpen} client={client} onClientChange={chooseClient} />
         </div>
       </header>
       <div className={`workspace-layout ${route ? 'has-detail' : ''}`}>
@@ -159,7 +166,7 @@ function NewCustomer({ open, onOpenChange, businesses, onCreated, returnFocus, s
         <DialogPanel className="grid gap-4">
           {error && <Notice tone="error">{error}</Notice>}
           <Field id="new-name" label="Customer name"><Input id="new-name" name="name" required maxLength={100} autoComplete="off" autoFocus /></Field>
-          <Field id="new-business" label="Business"><Input id="new-business" name="business" required maxLength={100} autoComplete="off" list="business-options" placeholder="Glide or Smooth" /><datalist id="business-options">{businesses.map(value => <option value={value} key={value} />)}</datalist></Field>
+          <Field id="new-business" label="Business"><Input id="new-business" name="business" required maxLength={100} autoComplete="off" list="business-options" placeholder="Your agency" /><datalist id="business-options">{businesses.map(value => <option value={value} key={value} />)}</datalist></Field>
           <Field id="new-org" label="Expected organization ID" hint="From the Glide organization URL."><Input id="new-org" name="expectedOrgId" required autoComplete="off" spellCheck={false} aria-describedby="new-org-hint" /></Field>
           <details className="advanced-settings"><summary>MCP endpoint</summary><Field id="new-server" label="MCP server URL"><Input id="new-server" name="serverUrl" type="url" required defaultValue="https://mcp.glideapps.dev/mcp" autoComplete="off" spellCheck={false} /></Field></details>
         </DialogPanel>
@@ -204,7 +211,7 @@ function CustomerDetail({ customer, bindings, jobs, headingRef, unavailable, ref
       {latestJob && latestJob.state !== 'complete' && !(latestJob.state === 'running' && runningJob?.authorizationUrl && !unavailable) && latestJob.message !== customer.lastCheck?.message && <div className={`job-status ${latestJob.state === 'failed' ? 'job-failed' : ''}`} role="status">{latestJob.state === 'running' && <RefreshCw className="busy-icon" aria-hidden="true" />}<p>{latestJob.message}</p></div>}
     </section>
     <ProjectBinding customer={customer} bindings={bindings} unavailable={unavailable || running} refresh={refresh} announce={announce} />
-    <details className="usage-help"><summary>Client setup and connection details</summary><div><p>Open a bound folder in T3 Code, Claude Code, or Codex. Start a new session after applying config. Approve project trust and MCP access in the client, then check the customer identity.</p><dl className="technical-details"><div><dt>Customer ID</dt><dd className="mono">{customer.id}</dd></div><div><dt>OAuth callback port</dt><dd className="mono">{customer.callbackPort}</dd></div>{latestJob && <div><dt>Last job</dt><dd>{latestJob.state}: {latestJob.message}</dd></div>}</dl></div></details>
+    <details className="usage-help"><summary>Connection details</summary><div><dl className="technical-details"><div><dt>Customer ID</dt><dd className="mono">{customer.id}</dd></div><div><dt>OAuth callback port</dt><dd className="mono">{customer.callbackPort}</dd></div>{latestJob && <div><dt>Last job</dt><dd>{latestJob.state}: {latestJob.message}</dd></div>}</dl></div></details>
     <footer className="detail-footer"><p>Saved {dateLabel(customer.createdAt)}</p><Dialog open={removeOpen} onOpenChange={next => { if (!removing) setRemoveOpen(next) }}><DialogTrigger render={<Button variant="ghost" disabled={bindings.length > 0 || running || unavailable} />}>Remove saved entry</DialogTrigger><DialogPopup showCloseButton={false} bottomStickOnMobile={false}><DialogHeader><DialogTitle>Remove {customer.name}?</DialogTitle><DialogDescription>This removes the saved customer entry. Protected local sign-in files remain available for recovery. Glide access is not revoked.</DialogDescription></DialogHeader><DialogFooter><DialogClose render={<Button variant="ghost" disabled={removing} />}>Cancel</DialogClose><Button variant="destructive" loading={removing} onClick={() => void remove()}>Remove saved entry</Button></DialogFooter></DialogPopup></Dialog></footer>
     {bindings.length > 0 && <p className="removal-note">Removal blocked by project bindings.</p>}
   </article>
@@ -216,33 +223,38 @@ function ProjectBinding({ customer, bindings, unavailable, refresh, announce }: 
   const [busy, setBusy] = useState<'choose' | 'preview' | 'apply' | null>(null)
   const [error, setError] = useState('')
   const [applied, setApplied] = useState('')
+  const [backups, setBackups] = useState<{ filePath: string; backupPath: string }[]>([])
   const [acknowledged, setAcknowledged] = useState(false)
+  const [connectionActions, setConnectionActions] = useState<ConnectionAction[]>([])
   const previewRef = useRef<HTMLHeadingElement>(null)
   const folderButton = useRef<HTMLButtonElement>(null)
   const verified = customer.lastCheck?.state === 'verified'
+  const connections = plan?.connections ?? []
+  const allConnectionsReviewed = connections.every(connection => connectionActions.some(action => action.id === connection.id))
+  const removalCount = connectionActions.filter(action => action.action === 'remove').length
   useEffect(() => { if (plan) previewRef.current?.focus() }, [plan])
   async function chooseFolder() {
     setBusy('choose'); setError(''); announce('Choose a project folder in the macOS dialog.')
     try {
       const result = await post<{ projectPath: string | null }>('/api/projects/choose-folder', {})
       if (result.projectPath !== null) {
-        setPath(result.projectPath); setPlan(null); setApplied(''); setAcknowledged(false)
+        setPath(result.projectPath); setPlan(null); setApplied(''); setAcknowledged(false); setConnectionActions([])
         announce('Folder selected. Review settings to continue.')
       } else { announce('Folder selection canceled.') }
     } catch (e) { setError(errorMessage(e)) }
     finally { setBusy(null); window.requestAnimationFrame(() => folderButton.current?.focus()) }
   }
   async function preview(event: FormEvent) {
-    event.preventDefault(); setBusy('preview'); setError(''); setApplied(''); setPlan(null); setAcknowledged(false)
+    event.preventDefault(); setBusy('preview'); setError(''); setApplied(''); setPlan(null); setAcknowledged(false); setConnectionActions([])
     try { setPlan(await post<Plan>('/api/projects/preview', { customerId: customer.id, projectPath: path })) }
     catch (e) { setError(errorMessage(e)) } finally { setBusy(null) }
   }
   async function apply() {
-    if (!plan) return
+    if (!plan || !allConnectionsReviewed || (plan.warnings.length > 0 && !acknowledged)) return
     setBusy('apply'); setError('')
     try {
-      const result = await post<{ ok: true; projectPath: string }>('/api/projects/apply', { planId: plan.planId })
-      setApplied(result.projectPath); setPlan(null); await refresh(); announce('Project settings saved. Start a new agent session to load them.')
+      const result = await post<{ ok: true; projectPath: string; backups: { filePath: string; backupPath: string }[] }>('/api/projects/apply', { planId: plan.planId, connectionActions })
+      setApplied(result.projectPath); setBackups(result.backups ?? []); setPlan(null); setConnectionActions([]); await refresh(); announce('Project settings saved. Start a new agent session to load them.')
     } catch (e) { setError(errorMessage(e)); setPlan(null) } finally { setBusy(null) }
   }
   return <section className="project-section">
@@ -253,14 +265,15 @@ function ProjectBinding({ customer, bindings, unavailable, refresh, announce }: 
     </form>
     {busy === 'choose' && <p className="field-hint" role="status">The folder picker is open on this Mac.</p>}
     {error && <Notice tone="error">{error}</Notice>}
-    {applied && <Notice tone="success"><strong>Config saved</strong><p className="mono break-anywhere">{applied}</p><p>Start a new client session and verify the customer connection.</p></Notice>}
+    {applied && <Notice tone="success"><strong>Config saved</strong><p className="mono break-anywhere">{applied}</p><p>Start a new client session and verify the customer connection.</p>{backups.length > 0 && <details className="settings-backups"><summary>Settings backups</summary><p>To undo a removal, copy the removed entry from its backup into the settings file.</p><ul>{backups.map(item => <li key={item.filePath}><span className="mono break-anywhere">{item.backupPath}</span></li>)}</ul></details>}</Notice>}
     {plan && <div className="config-review"><div className="review-heading"><h3 ref={previewRef} tabIndex={-1}>Config preview</h3><p className="mono break-anywhere">{plan.projectPath}</p></div>
       {!verified && <Notice tone="warning">Verify the organization before applying config.</Notice>}
-      {plan.warnings.length > 0 && <Notice tone="warning"><strong>Existing connections</strong><ul>{plan.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul></Notice>}
+      {plan.warnings.length > 0 && <Notice tone="warning"><strong>Some settings could not be checked</strong><ul>{plan.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul></Notice>}
+      <ConnectionReview connections={connections} actions={connectionActions} disabled={busy !== null} onChange={action => setConnectionActions(current => [...current.filter(item => item.id !== action.id), action])} />
       <p className="preview-caption">Generated config entries.</p>
       <div className="preview-files">{plan.files.map(file => <details key={file.path} open><summary><span className="mono">{file.path}</span><Badge variant={file.changed ? 'info' : 'secondary'}>{file.changed ? 'Will change' : 'No change'}</Badge></summary><pre tabIndex={0} aria-label={`Generated settings for ${file.path}`}><code>{file.content}</code></pre></details>)}</div>
-      {plan.warnings.length > 0 && <label className="warning-acknowledgment"><input type="checkbox" checked={acknowledged} onChange={event => setAcknowledged(event.target.checked)} /><span>I reviewed the existing connection warnings.</span></label>}
-      <div className="review-actions"><Button variant="ghost" disabled={busy !== null} onClick={() => setPlan(null)}>Cancel review</Button><Button onClick={() => void apply()} loading={busy === 'apply'} disabled={busy !== null || !verified || unavailable || (plan.warnings.length > 0 && !acknowledged)}>Apply config</Button></div>
+      {plan.warnings.length > 0 && <label className="warning-acknowledgment"><input type="checkbox" checked={acknowledged} disabled={busy !== null} onChange={event => setAcknowledged(event.target.checked)} /><span>Continue with the settings that could be checked.</span></label>}
+      <div className="review-actions"><Button variant="ghost" disabled={busy !== null} onClick={() => { setPlan(null); setConnectionActions([]) }}>Cancel review</Button><Button onClick={() => void apply()} loading={busy === 'apply'} disabled={busy !== null || !verified || unavailable || !allConnectionsReviewed || (plan.warnings.length > 0 && !acknowledged)}>{removalCount > 0 ? `Apply and remove ${removalCount}` : 'Apply config'}</Button></div>
     </div>}
   </section>
 }

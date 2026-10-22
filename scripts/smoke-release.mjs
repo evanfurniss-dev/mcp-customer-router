@@ -85,10 +85,15 @@ async function checkDashboard(origin) {
   assert.match(html, /id="root"/)
   const assets = [...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map((match) => match[1])
   assert.ok(assets.length >= 3, 'The dashboard must include its JavaScript, stylesheet, and theme script.')
+  let javascript = ''
   for (const asset of assets) {
     const response = await fetch(new URL(asset, origin))
     assert.equal(response.status, 200, `Missing asset: ${asset}`)
     assert.doesNotMatch(response.headers.get('content-type') ?? '', /text\/html/)
+    if (asset.endsWith('.js')) javascript += await response.text()
+  }
+  for (const feature of ['One connection per customer', 'Client setup', 'Conductor', 'connectionActions']) {
+    assert.ok(javascript.includes(feature), `The packaged dashboard must contain ${feature}.`)
   }
   return (await (await fetch(`${origin}/api/session`)).json()).token
 }
@@ -105,6 +110,70 @@ async function preview(origin, token, customerId) {
   assert.ok(serialized.includes(cli), 'Client settings must use the stable CLI path.')
   assert.ok(serialized.includes(stableNode), 'Client settings must use the stable Node path.')
   assert.ok(!serialized.includes('/Cellar/'), 'Client settings must survive Cellar cleanup.')
+  return result
+}
+
+async function checkConnectionReview(origin, token, customerId) {
+  const existingPath = path.join(env.CLAUDE_CONFIG_DIR, '.claude.json')
+  const original = JSON.stringify({
+    mcpServers: {
+      'glide-remove': { command: 'old-test-connection', env: { SECRET: 'package-test-private-value' } },
+      'glide-keep': { command: 'retained-test-connection' },
+      unrelated: { command: 'unrelated-test-connection' },
+    },
+    theme: 'preserved',
+  })
+  await fs.mkdir(path.dirname(existingPath), { recursive: true })
+  await fs.writeFile(existingPath, original, { mode: 0o600 })
+  const plan = await preview(origin, token, customerId)
+  assert.doesNotMatch(JSON.stringify(plan), /package-test-private-value/)
+  assert.deepEqual(plan.connections.map((entry) => entry.name).sort(), ['glide-keep', 'glide-remove'])
+  assert.ok(plan.connections.every((entry) => entry.scope === 'user' && entry.removable))
+  assert.deepEqual(plan.warnings, [], 'Supported connection entries should be choices, not warnings.')
+  const apply = (body) =>
+    fetch(`${origin}/api/projects/apply`, {
+      method: 'POST',
+      headers: { origin, 'content-type': 'application/json', 'x-router-token': token },
+      body: JSON.stringify(body),
+    })
+  assert.equal((await apply({ planId: plan.planId })).status, 400, 'Every detected connection needs an explicit choice.')
+  const connectionActions = plan.connections.map((entry) => ({
+    id: entry.id,
+    action: entry.name === 'glide-remove' ? 'remove' : 'ignore',
+  }))
+  assert.equal((await apply({ planId: plan.planId, connectionActions })).status, 409, 'Unverified customers cannot apply changes.')
+  assert.equal(await fs.readFile(existingPath, 'utf8'), original)
+
+  // Seed only this temporary registry to exercise package application without live OAuth.
+  // Identity verification itself is tested by the separate child-process checks.
+  const registryPath = path.join(data, 'registry.json')
+  const registry = JSON.parse(await fs.readFile(registryPath, 'utf8'))
+  const customer = registry.customers.find((entry) => entry.id === customerId)
+  customer.lastCheck = {
+    state: 'verified',
+    observedOrgId: customer.expectedOrgId,
+    checkedAt: new Date().toISOString(),
+    message: 'Synthetic package fixture.',
+  }
+  await fs.writeFile(registryPath, JSON.stringify(registry), { mode: 0o600 })
+  const response = await apply({ planId: plan.planId, connectionActions })
+  const result = await response.json()
+  assert.equal(response.status, 200, JSON.stringify(result))
+  assert.equal(result.backups.length, 1)
+  assert.equal(result.backups[0].filePath, existingPath)
+  assert.equal(await fs.readFile(result.backups[0].backupPath, 'utf8'), original)
+  assert.equal((await fs.stat(result.backups[0].backupPath)).mode & 0o777, 0o600)
+  const saved = JSON.parse(await fs.readFile(existingPath, 'utf8'))
+  assert.equal(saved.mcpServers['glide-remove'], undefined)
+  assert.equal(saved.mcpServers['glide-keep'].command, 'retained-test-connection')
+  assert.equal(saved.mcpServers.unrelated.command, 'unrelated-test-connection')
+  assert.equal(saved.theme, 'preserved')
+  const claude = JSON.parse(await fs.readFile(path.join(project, '.mcp.json'), 'utf8'))
+  assert.ok(claude.mcpServers['customer-glide'].args.includes(customerId))
+  assert.match(await fs.readFile(path.join(project, '.codex/config.toml'), 'utf8'), /customer-glide/)
+  const state = JSON.parse(await fs.readFile(registryPath, 'utf8'))
+  const canonicalProject = await fs.realpath(project)
+  assert.ok(state.bindings.some((entry) => entry.customerId === customerId && entry.path === canonicalProject))
 }
 
 try {
@@ -120,6 +189,20 @@ try {
   assert.deepEqual(Object.keys(manifest.bin), ['mcp-customer-router'])
   assert.equal(manifest.scripts, undefined)
   assert.equal(manifest.devDependencies, undefined)
+  for (const file of [
+    'README.md',
+    'LICENSE',
+    'CHANGELOG.md',
+    'CONTRIBUTING.md',
+    'SECURITY.md',
+    'docs/CLIENT-SETUP.md',
+    'docs/images/setup-tour.png',
+    'docs/RELEASING.md',
+    'docs/RELEASE-NOTES.md',
+    'web/licenses/THIRD-PARTY-NOTICES.txt',
+  ]) {
+    assert.ok((await fs.stat(path.join(first, file))).size > 0, `Missing release document: ${file}`)
+  }
   assert.equal((await command(['--version'])).trim(), manifest.version)
   assert.match(await command(['--help']), /service install/)
   assert.equal(await fs.stat(data).catch(() => null), null, 'Help and version must not create user state.')
@@ -130,6 +213,7 @@ try {
   let origin = await start()
   let token = await checkDashboard(origin)
   await preview(origin, token, customer.id)
+  await checkConnectionReview(origin, token, customer.id)
 
   // A live process must keep working after Homebrew switches opt and removes the old keg.
   await fs.cp(first, next, { recursive: true, verbatimSymlinks: true })
@@ -162,7 +246,7 @@ try {
   await checkDashboard(origin)
   assert.equal(JSON.parse(await command(['list'])).customers[0].id, customer.id)
   console.log(
-    'PASS: standalone package, CLI, dashboard assets, child process, stable client paths, upgrade and restart; no live credentials used.',
+    'PASS: package documents and UI, CLI, connection review and private backups, child process, stable client paths, upgrade and restart; no live credentials used.',
   )
 } finally {
   await stop()

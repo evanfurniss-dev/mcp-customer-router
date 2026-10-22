@@ -7,14 +7,20 @@ on:
         required: true
         type: string
 permissions:
-  contents: write
+  contents: read
+concurrency:
+  group: router-release-${{ inputs.tag }}
+  cancel-in-progress: false
 jobs:
   release:
     runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.tag }}
+          ref: refs/tags/${{ inputs.tag }}
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -24,7 +30,10 @@ jobs:
       - name: Check tag and version
         env:
           RELEASE_TAG: ${{ inputs.tag }}
-        run: test "$RELEASE_TAG" = "router-v$(node -p 'require("./package.json").version')"
+        run: |
+          test "$RELEASE_TAG" = "router-v$(node -p 'require("./package.json").version')"
+          git show-ref --verify "refs/tags/$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
       - run: pnpm install --frozen-lockfile
       - run: pnpm --dir web install --frozen-lockfile
       - run: pnpm lint
@@ -33,9 +42,15 @@ jobs:
       - run: pnpm build
       - run: pnpm release:package
       - run: pnpm release:smoke
+      - name: Verify release checksum
+        working-directory: release
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: shasum -a 256 -c "mcp-customer-router-${RELEASE_TAG#router-v}.tar.gz.sha256"
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           version="${RELEASE_TAG#router-v}"

@@ -7,9 +7,13 @@ on:
     branches: [main]
 permissions:
   contents: read
+concurrency:
+  group: router-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         node: [22, 24]

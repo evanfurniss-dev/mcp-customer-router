@@ -11,7 +11,17 @@ export interface Customer {
 }
 export interface Job { id: string; customerId: string; state: 'running' | 'complete' | 'failed'; message: string; startedAt: string; finishedAt?: string; authorizationUrl?: string }
 export interface RouterState { customers: Customer[]; bindings: { path: string; customerId: string; createdAt: string }[]; jobs: Job[] }
-export interface Plan { planId: string; projectPath: string; files: { path: string; content: string; changed: boolean }[]; warnings: string[] }
+export interface ExistingConnection {
+  id: string
+  name: string
+  filePath: string
+  scope: 'project' | 'user' | 'project-private'
+  client: 'claude' | 'codex'
+  removable: boolean
+  reason?: string
+}
+export interface ConnectionAction { id: string; action: 'remove' | 'ignore' }
+export interface Plan { planId: string; projectPath: string; files: { path: string; content: string; changed: boolean }[]; warnings: string[]; connections: ExistingConnection[] }
 let session: Promise<string> | undefined
 async function getToken() {
   if (!session) session = fetch('/api/session', { cache: 'no-store', credentials: 'same-origin' }).then(async (res) => {

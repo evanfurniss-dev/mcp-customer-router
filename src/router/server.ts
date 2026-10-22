@@ -11,6 +11,8 @@ import {
   rollbackProjectConfig,
   planProjectConfig,
   projectConfigPreview,
+  reviewProjectConnections,
+  type ProjectConfigApplyResult,
   type ProjectConfigPlan,
 } from './project-config'
 
@@ -161,6 +163,7 @@ export function createRouterServer(options: ServerOptions) {
         projectPath: plan.projectPath,
         files: preview.files.map((file) => ({ path: file.path, content: file.generatedSnippet, changed: file.changed })),
         warnings: plan.warnings,
+        connections: preview.connections,
       })
     }),
   )
@@ -172,22 +175,38 @@ export function createRouterServer(options: ServerOptions) {
       const prepared = typeof planId === 'string' ? plans.get(planId) : undefined
       if (!prepared || prepared.expiresAt < Date.now())
         throw new UserError('This preview expired. Preview the project settings again.', 409)
+      let reviewed: ProjectConfigPlan
+      try {
+        reviewed = reviewProjectConnections(prepared.plan, request.body?.connectionActions)
+      } catch (error) {
+        throw new UserError(error instanceof Error ? error.message : 'Review the existing connections.', 400)
+      }
       const customer = await options.store.customer(prepared.customerId)
       if (customer.lastCheck?.state !== 'verified' || jobs.isRunning(customer.id)) {
         throw new UserError('Verify this customer connection before applying its project settings.', 409)
       }
       plans.delete(planId)
+      let result: ProjectConfigApplyResult | undefined
       try {
         await options.store.bind(
-          prepared.plan.projectPath,
+          reviewed.projectPath,
           prepared.customerId,
-          () => applyProjectConfig(prepared.plan),
-          () => rollbackProjectConfig(prepared.plan),
+          async () => {
+            result = await applyProjectConfig(reviewed)
+          },
+          async () => {
+            if (result?.files.some((file) => file.changed)) await rollbackProjectConfig(reviewed)
+          },
         )
       } catch (error) {
         throw new UserError(error instanceof Error ? error.message : 'Could not apply project settings.', 409)
       }
-      response.json({ ok: true, projectPath: prepared.plan.projectPath })
+      response.json({
+        ok: true,
+        projectPath: reviewed.projectPath,
+        backups:
+          result?.files.filter((file) => file.backupPath).map((file) => ({ filePath: file.path, backupPath: file.backupPath })) ?? [],
+      })
     }),
   )
 

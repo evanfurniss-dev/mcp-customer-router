@@ -14,6 +14,7 @@ async function setup(chooseFolder?: (signal: AbortSignal) => Promise<string | nu
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'router-api-'))
   homes.push(home)
   vi.stubEnv('HOME', home)
+  vi.stubEnv('CLAUDE_CONFIG_DIR', home)
   vi.stubEnv('CODEX_HOME', path.join(home, '.codex'))
   const store = new RegistryStore(path.join(home, 'state'))
   const runner = vi.fn(async (customer) => ({
@@ -45,6 +46,7 @@ afterEach(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()))
   }
   vi.unstubAllEnvs()
+  vi.restoreAllMocks()
   await Promise.all(homes.splice(0).map((home) => fs.rm(home, { recursive: true, force: true })))
 })
 
@@ -196,6 +198,127 @@ describe('local dashboard API', () => {
     await fs.writeFile(path.join(home, '.mcp.json'), '{"mcpServers":{}}')
     expect((await request('/api/projects/apply', 'POST', { planId: preview.planId })).status).toBe(409)
     expect((await store.read()).bindings).toHaveLength(0)
+  })
+
+  it('requires valid choices before identity checks and removes only reviewed entries with private backups', async () => {
+    const { home, store, request } = await setup()
+    const customer = await store.add({ name: 'Acme', business: 'Example', expectedOrgId: 'org-a' })
+    const projectPath = path.join(home, 'project')
+    await fs.mkdir(projectPath)
+    const existingPath = path.join(home, '.claude.json')
+    const original = JSON.stringify({
+      mcpServers: {
+        glideos: { command: 'existing', env: { SECRET: 'do-not-expose' } },
+        'glide-keep': { command: 'keep' },
+      },
+      other: 'preserved',
+    })
+    await fs.writeFile(existingPath, original)
+    const response = await request('/api/projects/preview', 'POST', { customerId: customer.id, projectPath })
+    const text = await response.text()
+    expect(text).not.toContain('do-not-expose')
+    const preview = JSON.parse(text) as { planId: string; connections: { id: string; name: string; scope: string }[]; warnings: string[] }
+    expect(preview.connections).toHaveLength(2)
+    expect(preview.connections.every((entry) => entry.scope === 'user')).toBe(true)
+    expect(preview.warnings).toEqual([])
+    expect((await request('/api/projects/apply', 'POST', { planId: preview.planId })).status).toBe(400)
+    const actions = preview.connections.map((entry) => ({ id: entry.id, action: entry.name === 'glideos' ? 'remove' : 'ignore' }))
+    for (const connectionActions of [
+      [{ id: '/tmp/arbitrary', action: 'remove' }],
+      [actions[0], actions[0]],
+      actions.map((action) => ({ ...action, filePath: '/tmp/arbitrary' })),
+      [{ id: actions[0].id, action: 'delete' }, actions[1]],
+    ])
+      expect((await request('/api/projects/apply', 'POST', { planId: preview.planId, connectionActions })).status).toBe(400)
+    expect((await request('/api/projects/apply', 'POST', { planId: preview.planId, connectionActions: actions })).status).toBe(409)
+    expect(await fs.readFile(existingPath, 'utf8')).toBe(original)
+    expect(await fs.readdir(projectPath)).toEqual([])
+    await store.recordCheck(customer.id, {
+      state: 'verified',
+      observedOrgId: 'org-a',
+      checkedAt: new Date().toISOString(),
+      message: 'Verified.',
+    })
+    const applied = await request('/api/projects/apply', 'POST', { planId: preview.planId, connectionActions: actions })
+    expect(applied.status).toBe(200)
+    const result = (await applied.json()) as { backups: { filePath: string; backupPath: string }[] }
+    expect(result.backups).toHaveLength(1)
+    expect(result.backups[0].filePath).toBe(existingPath)
+    expect(await fs.readFile(result.backups[0].backupPath, 'utf8')).toBe(original)
+    expect((await fs.stat(result.backups[0].backupPath)).mode & 0o777).toBe(0o600)
+    expect(JSON.parse(await fs.readFile(existingPath, 'utf8'))).toEqual({
+      mcpServers: { 'glide-keep': { command: 'keep' } },
+      other: 'preserved',
+    })
+    expect((await store.read()).bindings).toHaveLength(1)
+  })
+
+  it('refuses stale removal previews without writing project files or a binding', async () => {
+    const { home, store, request } = await setup()
+    const customer = await store.add({ name: 'Acme', business: 'Example', expectedOrgId: 'org-a' })
+    await store.recordCheck(customer.id, {
+      state: 'verified',
+      observedOrgId: 'org-a',
+      checkedAt: new Date().toISOString(),
+      message: 'Verified.',
+    })
+    const projectPath = path.join(home, 'project')
+    await fs.mkdir(projectPath)
+    const globalPath = path.join(home, '.claude.json')
+    await fs.writeFile(globalPath, '{"mcpServers":{"glideos":{"command":"existing"}}}')
+    const preview = (await (await request('/api/projects/preview', 'POST', { customerId: customer.id, projectPath })).json()) as {
+      planId: string
+      connections: { id: string }[]
+    }
+    await fs.writeFile(globalPath, '{"mcpServers":{"glideos":{"command":"later"}}}')
+    const applied = await request('/api/projects/apply', 'POST', {
+      planId: preview.planId,
+      connectionActions: preview.connections.map((entry) => ({ id: entry.id, action: 'remove' })),
+    })
+    expect(applied.status).toBe(409)
+    expect((await applied.json()).error).toContain('changed after preview')
+    expect(await fs.readdir(projectPath)).toEqual([])
+    expect((await store.read()).bindings).toHaveLength(0)
+    expect(await fs.readFile(globalPath, 'utf8')).toContain('later')
+  })
+
+  it('does not undo externally completed settings when an unchanged apply is followed by a registry failure', async () => {
+    const { home, store, request } = await setup()
+    const customer = await store.add({ name: 'Acme', business: 'Example', expectedOrgId: 'org-a' })
+    await store.recordCheck(customer.id, {
+      state: 'verified',
+      observedOrgId: 'org-a',
+      checkedAt: new Date().toISOString(),
+      message: 'Verified.',
+    })
+    const projectPath = path.join(home, 'project')
+    await fs.mkdir(projectPath)
+    const globalPath = path.join(home, '.claude.json')
+    await fs.writeFile(globalPath, '{"mcpServers":{"glideos":{"command":"existing"}}}')
+    const preview = (await (await request('/api/projects/preview', 'POST', { customerId: customer.id, projectPath })).json()) as {
+      planId: string
+      files: { path: string; content: string }[]
+      connections: { id: string }[]
+    }
+    // An independent client reaches the intended state between Preview and Apply.
+    for (const file of preview.files) {
+      await fs.mkdir(path.dirname(file.path), { recursive: true })
+      await fs.writeFile(file.path, file.content)
+    }
+    const removed = `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`
+    await fs.writeFile(globalPath, removed)
+    vi.spyOn(store, 'bind').mockImplementation(async (_path, _customer, writeConfig, rollback) => {
+      await writeConfig()
+      await rollback?.()
+      throw new Error('Simulated registry failure')
+    })
+    const response = await request('/api/projects/apply', 'POST', {
+      planId: preview.planId,
+      connectionActions: preview.connections.map((entry) => ({ id: entry.id, action: 'remove' })),
+    })
+    expect(response.status).toBe(409)
+    expect(await fs.readFile(globalPath, 'utf8')).toBe(removed)
+    for (const file of preview.files) expect(await fs.readFile(file.path, 'utf8')).toBe(file.content)
   })
 
   it('records completed checks with their verified organization', async () => {

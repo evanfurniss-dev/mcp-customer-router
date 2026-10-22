@@ -203,6 +203,108 @@ a { color: inherit; }
 .status-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--muted-foreground); flex-shrink: 0; }
 .status-error { color: var(--destructive-foreground); }
 .status-compact { justify-content: flex-end; font-size: 11px; }
+/* The tour and client setup reuse the local dialog, button, and form tokens. */
+.walkthrough-dialog { max-width: 940px; min-height: min(510px, calc(100svh - 32px)); }
+.tour-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.12fr); min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+.tour-copy { padding: 40px 32px 30px; display: flex; flex-direction: column; min-width: 0; }
+.tour-copy [data-slot=dialog-title] { font-size: 25px; font-weight: 575; letter-spacing: -.025em; line-height: 1.2; margin: 0 0 22px; }
+.walkthrough-content { font-size: 14px; line-height: 1.65; color: var(--text-standard); }
+.walkthrough-content p { margin: 0 0 18px; }
+.walkthrough-content p:last-child { margin-bottom: 0; }
+.walkthrough-content strong { color: var(--foreground); font-weight: 600; }
+.walkthrough-content code { font-family: var(--font-mono); font-size: 12px; overflow-wrap: anywhere; }
+.walkthrough-note { font-size: 12px; color: var(--muted-foreground); }
+.tour-daily-use { margin-top: 20px; font-size: 12px; }
+.tour-daily-use summary { padding-block: 8px; color: var(--foreground); }
+.tour-daily-use p { margin-top: 10px; }
+.tour-step-labels { display: flex; gap: 6px; padding-top: 28px; margin-top: auto; }
+.tour-step-labels > span { width: 20px; height: 3px; background: var(--input); border-radius: 2px; }
+.tour-step-labels > .current { background: var(--foreground); }
+.tour-step-labels > .complete { background: var(--muted-foreground); }
+.tour-right { background: var(--secondary); padding: 48px 32px 24px; min-width: 0; display: flex; align-items: center; border-inline-start: 1px solid var(--border); }
+.tour-example { margin: 0; width: 100%; }
+.tour-example figcaption { color: var(--muted-foreground); font-size: 11px; text-align: center; margin-top: 20px; }
+.tour-map { display: flex; flex-direction: column; align-items: center; }
+.tour-map-node, .tour-separated { display: flex; align-items: center; gap: 12px; border-radius: 12px; padding: 15px 16px; width: 100%; background: var(--card); border: 1px solid var(--border); }
+.tour-map-node svg, .tour-separated svg { flex-shrink: 0; width: 20px; height: 20px; }
+.tour-map-node strong, .tour-separated strong { font-size: 13px; font-weight: 550; display: block; }
+.tour-map-node span, .tour-separated span { font-size: 11px; color: var(--muted-foreground); display: block; margin-top: 3px; }
+.tour-map .tour-connector { width: 14px; height: 24px; color: var(--muted-foreground); }
+.tour-node-end { margin-inline-start: auto; color: var(--muted-foreground); }
+.tour-router-node { border-color: var(--input); }
+.tour-initial { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; font-size: 12px; border-radius: 7px; background: var(--secondary); }
+.tour-separated { margin-top: 16px; background: transparent; }
+.dark .tour-scene img { filter: invert(1); }
+.tour-window { border: 1px solid var(--input); border-radius: 12px; background: var(--card); box-shadow: var(--flat-shadow); overflow: hidden; }
+.tour-window-header { padding: 16px 18px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 550; }
+.tour-window-header svg { width: 15px; height: 15px; color: var(--muted-foreground); }
+.tour-window-header > span + svg { margin-inline-start: auto; }
+.tour-form-demo { display: grid; gap: 7px; padding: 20px 18px 0; }
+.tour-form-demo > span { font-size: 11px; color: var(--muted-foreground); }
+.tour-form-demo > div { padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; font-size: 12px; }
+.tour-window-actions { padding: 16px 18px; display: flex; justify-content: flex-end; }
+.tour-button { display: inline-block; background: var(--primary); color: var(--primary-foreground); font-size: 11px; padding: 9px 13px; border-radius: 999px; }
+.tour-signin { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 24px 20px; }
+.tour-signin > strong { font-size: 13px; font-weight: 550; margin-bottom: 2px; }
+.tour-org-choice { width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 12px; border: 1px solid var(--input); border-radius: 7px; font-size: 12px; }
+.tour-org-choice svg { width: 14px; height: 14px; }
+.tour-org-other { color: var(--muted-foreground); border-color: var(--border); }
+.tour-result { padding: 14px; display: flex; gap: 7px; align-items: center; background: var(--muted); font-size: 11px; }
+.tour-result svg { width: 14px; height: 14px; }
+.tour-config-demo { padding: 16px 18px; }
+.tour-config-demo > div { display: flex; gap: 8px; align-items: center; padding-block: 8px; font-size: 11px; }
+.tour-config-demo svg { width: 14px; height: 14px; color: var(--muted-foreground); }
+.tour-config-demo svg:last-child { margin-inline-start: auto; }
+.tour-config-demo p { color: var(--muted-foreground); font-size: 11px; margin: 8px 0 0; overflow-wrap: anywhere; }
+.tour-review-demo { border-top: 1px solid var(--border); padding: 16px 18px 4px; font-size: 11px; }
+.tour-review-demo > strong { font-weight: 550; }
+.tour-review-demo > div { display: flex; align-items: center; gap: 4px; margin: 12px 0 8px; }
+.tour-review-demo > div > span:first-child { flex: 1; }
+.tour-chip { border: 1px solid var(--border); border-radius: 999px; padding: 5px 8px; }
+.tour-chip-selected { background: var(--primary); color: var(--primary-foreground); }
+.tour-review-demo small { color: var(--muted-foreground); font-size: 10px; }
+[data-slot=dialog-footer].walkthrough-footer { flex-direction: row; flex-shrink: 0; align-items: center; justify-content: space-between; padding: 14px 24px; background: var(--card); }
+.walkthrough-progress { color: var(--muted-foreground); font-size: 12px; white-space: nowrap; }
+.walkthrough-actions { display: flex; gap: 8px; }
+.client-setup-trigger svg { width: 14px; height: 14px; }
+.client-setup-dialog { max-width: 880px; }
+.client-setup-dialog [data-slot=dialog-header] { padding: 26px 52px 20px 28px; }
+.client-setup-dialog [data-slot=dialog-title] { font-size: 22px; }
+.client-setup-dialog [data-slot=dialog-description] { font-size: 13px; }
+.client-setup-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 32px; }
+.client-picker { padding: 0; margin: 0; border: 0; min-width: 0; display: grid; align-content: start; gap: 6px; }
+.client-option { display: flex; align-items: center; gap: 9px; padding: 10px 12px; min-height: 40px; border: 1px solid var(--border); border-radius: 9px; font-size: 13px; cursor: pointer; color: var(--text-standard); }
+.client-option:hover { background: var(--hover); }
+.client-option.is-selected { border-color: var(--input); background: var(--secondary); color: var(--foreground); }
+.client-option input { width: 14px; height: 14px; accent-color: var(--foreground); margin: 0; }
+.client-option:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
+.client-guide { min-width: 0; width: 100%; color: var(--text-standard); font-size: 13px; line-height: 1.6; }
+.client-guide h3 { color: var(--foreground); font-size: 17px; font-weight: 575; margin: 0 0 10px; }
+.client-guide > p { margin: 0 0 18px; }
+.client-guide ol { padding-inline-start: 20px; margin: 0 0 20px; list-style: decimal; }
+.client-guide li { margin-bottom: 12px; padding-inline-start: 3px; }
+.client-guide .client-note { font-size: 12px; color: var(--muted-foreground); }
+.client-command { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; }
+.client-sources { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 11px; }
+.client-sources a { display: inline-flex; align-items: center; gap: 3px; text-decoration: underline; text-underline-offset: 3px; }
+.client-sources svg { width: 12px; height: 12px; }
+.tour-client-panel { align-items: flex-start; padding-top: 40px; }
+.tour-copy .client-picker { margin: 20px 0; }
+@media (prefers-reduced-motion: no-preference) { .tour-scene { animation: tour-enter 200ms ease-out; } @keyframes tour-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } } }
+@media (max-width: 760px) {
+  .tour-body { display: block; min-height: 0; }
+  .tour-copy { padding: 28px 24px 24px; }
+  .tour-copy [data-slot=dialog-title] { padding-inline-end: 24px; font-size: 23px; }
+  .tour-step-labels { display: none; }
+  .tour-right { padding: 24px; border-inline-start: 0; border-top: 1px solid var(--border); }
+  .tour-example { max-width: 360px; margin-inline: auto; }
+  .tour-client-panel { padding: 24px; }
+  .client-setup-layout { grid-template-columns: 1fr; gap: 24px; }
+  .client-picker { grid-template-columns: 1fr 1fr; }
+  .client-option { min-height: 44px; font-size: 12px; padding: 9px; }
+  .client-setup-dialog [data-slot=dialog-header] { padding-inline-start: 20px; }
+}
+@media (max-width: 380px) { .client-picker { grid-template-columns: 1fr; } .tour-copy, .tour-right { padding-inline: 18px; } }
 @media (prefers-reduced-motion: no-preference) { .busy-icon { animation: busy 1.3s linear infinite; } @keyframes busy { to { transform: rotate(360deg); } } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
 
@@ -232,6 +334,8 @@ a { color: inherit; }
   .detail-footer { align-items: flex-start; flex-direction: column; gap: 4px; }
   .removal-note { text-align: start; }
   .preview-files summary [data-slot=badge] { margin-top: 6px; }
+  .app-header { flex-wrap: wrap; }
+  .header-actions { margin-inline-start: auto; }
 }
 @media (pointer: coarse) {
   [data-slot=button], [data-slot=input], .path-button, summary, .back-link, .app-title, .menu-option { min-height: 44px; }

@@ -2,6 +2,18 @@
 
 Reviewed 2026-10-19. This document covers `web/` only.
 
+## First-launch walkthrough (2026-10-21)
+
+`web/src/components/router-walkthrough.tsx` composes the existing Button and COSS/Base UI Dialog primitives. No dependency or alternate dialog implementation was added. The five steps explain the saved Glide sign-in, customer entry, authorization, folder configuration, and everyday use. Client setup and data storage details stay in expandable sections on the final step.
+
+The top-right Info icon has the accessible name and tooltip “How to use the router.” First use opens the walkthrough. Done, Close, Escape, and backdrop dismissal save `dismissed` under `mcp-customer-router.walkthrough.v1` in browser local storage. Reopening starts at the first step. Storage failure still allows dismissal for the current visit. This preference is separate from customer records and credentials.
+
+The existing dialog manages modal focus and Escape. Each step focuses its heading, identifies its position, and keeps navigation in a fixed footer while the body scrolls. Closing returns focus to the info button. Existing light/dark tokens and reduced-motion rules apply. The narrow header can wrap to preserve all actions.
+
+Verified against a separate local dashboard with synthetic customer data: automatic first opening; all five steps and expandable details; completion and reload persistence; reopening at the first step; Escape and focus return; keyboard Tab wrapping inside the dialog; light and dark appearance; 320px layout with no horizontal overflow and an accessible footer on the longest step. The frontend typecheck/build and repository lint passed. No customer sign-in, config application, or remote write was used for these UI checks.
+
+Source choice: reuse of `web/src/components/ui/dialog.tsx` and `button.tsx`, whose source comparisons are recorded below. Additional onboarding libraries were unnecessary.
+
 ## Foundation
 
 React 19.3.1, TypeScript 5.9.3, Vite 8.3.4, Tailwind CSS 4.3.3 and Base UI 1.9.0. Dependencies are pinned in `web/package.json` and resolved in its independent `pnpm-lock.yaml`. The app uses the shadcn copy-and-own structure, `components.json`, CSS variable tokens, and `src/components/ui` ownership. No external font requests or runtime CDN assets are used.
@@ -111,3 +123,15 @@ Validation:
 - The live in-app browser confirmed theme switching, dark mode after reload, and the themed business menu and customer dialog. It was left in dark mode. Native authentication and customer changes were not exercised.
 
 Evidence: `/private/tmp/router-g3-ui-results.json`, `/private/tmp/router-g3-folder-ui-results.json`, `/private/tmp/router-g3-sign-in-ui-results.json`, and `/private/tmp/router-g3-{dark,light}-{desktop,320-detail,320-list,320-menu,320-dialog}.png`.
+
+## Guided setup and connection review (2026-10-21)
+
+The five-step tour now uses a two-column local Dialog. The left side contains instructions; the right side contains labeled example views of the connection path, customer form, sign-in, and folder review. The last step offers six client choices with instructions. These examples use the existing G3 tokens and local interface shapes. The user explicitly requested the right panel and mockups. A 200ms scene transition follows step changes and is disabled by the existing reduced-motion rule. No new dependency, image service, or component library was added.
+
+Client setup is also available from the header. The two selectors share state and save the selected client in browser storage. The guides link to current official documentation. Claude app guidance covers the local Code tab; Conductor guidance requires binding its actual workspace. See CLIENT-SETUP.md for source and live-test limits.
+
+Normal detected Glide entries now appear in a neutral review list. Each entry exposes its client, file, and project/user scope with Remove and Ignore choices. Removal is staged until Apply; shared entries identify their effect on other projects. Entries with unsupported layouts explain why Remove is unavailable. Inspection failures remain separate. The success state exposes backup paths inside a disclosure.
+
+Validation: the web build passed. Browser checks on an isolated local server covered all tour steps, all six choices, keyboard selection, the shared saved choice across reload, and a mixed Remove/Ignore Apply. Direct file readbacks confirmed selected removals, retained ignored and unrelated entries, TOML comments, and 0600 backups containing the removed entries. At 320×568 and 1000×480, the tour footer remained visible and the page did not overflow horizontally. Production customer settings were not removed during these tests. Source review checked reduced motion; live tests in all six AI clients are outside this UI change.
+
+Runtime-path migration was also checked: a source-installed generated entry can be updated to the installed executable paths only when all other fields and binding arguments match. Different customers, folders, data homes, and extra settings remain conflicts. The installed dashboard preview was verified without applying changes to customer settings.

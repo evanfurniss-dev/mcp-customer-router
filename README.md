@@ -1,21 +1,68 @@
 # Customer MCP Router
 
-A local connection manager for Glide customers. Each customer has a separate saved authorization. Claude Code and Codex share it through their project settings. T3 Code can use those settings through its provider adapters.
+[![Router checks](https://github.com/evanfurniss-dev/mcp-customer-router/actions/workflows/main.yaml/badge.svg)](https://github.com/evanfurniss-dev/mcp-customer-router/actions/workflows/main.yaml)
+[![MIT license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-This MVP is built for local use on [mcp-remote](https://github.com/punkpeye/mcp-remote), based on upstream commit `71cadf3aaa935608d5e14d472a59e9583ebb9505`. The upstream bridge and license remain in this fork. Its original instructions are in [UPSTREAM-README.md](docs/UPSTREAM-README.md).
+Connect each customer's Glide organization once, then use that saved connection from Claude Code and Codex. The router links a local project folder to one customer and checks the organization before allowing tool calls.
 
-## Install on a Mac
+![Customer MCP Router guided setup](docs/images/setup-tour.png)
 
-With [Homebrew](https://brew.sh) installed:
+## Install
+
+On macOS with [Homebrew](https://brew.sh):
 
 ```sh
 brew install evanfurniss-dev/tap/mcp-customer-router
 mcp-customer-router service install --open
 ```
 
-Homebrew installs Node and the built application. Each person connects their own Glide organizations. The download contains no customer records or credentials. The dashboard runs locally and starts at login. It uses port 4773 by default.
+Homebrew installs Node and the application. The dashboard opens at `http://127.0.0.1:4773` and starts at login. Each person signs in to their own Glide organizations; the package contains no customer records or credentials.
 
-To update:
+Open it each day with:
+
+```sh
+mcp-customer-router open
+```
+
+You can close the browser and Terminal. The Mac must stay awake for local agent work to continue. The router manages its own macOS user service; use its `service` commands rather than `brew services`.
+
+## Set up a customer
+
+1. Select **New**. Enter a name, business label, and the organization ID from the customer's Glide URL, after `/o/`.
+2. Select **Connect Glide**, complete sign-in, and choose that organization. If the browser does not open, select **Open Glide sign-in**. Wait for **Organization verified**.
+3. Select **Choose folder**, then **Preview config**. Review any existing Glide connections and choose **Remove** or **Ignore** for each. Apply the configuration.
+4. Open that folder in your AI client and start a fresh session. Accept any project trust or MCP approval prompts. Ask the agent to list projects through `customer-glide` and check the organization before making changes.
+
+The walkthrough opens on the first visit. The **ⓘ** button opens it again. **Client setup** provides instructions for each supported local client.
+
+### Choose a client
+
+| Client | Setup scope |
+| --- | --- |
+| T3 Code | Local Claude Code or Codex provider in the linked folder |
+| Claude Code CLI | Run `claude` in the linked folder and approve its project MCP entry |
+| Claude app | Local **Code** tab; the guide does not configure chat or Cowork |
+| Codex app | Local project on the same Mac; the project must be trusted |
+| Codex CLI | Run `codex` in the linked folder and check `/mcp` |
+| Conductor | Link each workspace's actual Git worktree folder before starting its agent |
+
+Claude app and Conductor guides are based on their documentation; live router trials for those two clients remain open. Each AI provider still needs its own account. See [client setup and verification limits](docs/CLIENT-SETUP.md).
+
+### Review existing connections
+
+**Preview config** detects other Glide entries in supported project and user settings. **Ignore** keeps an entry for this review. **Remove** takes effect only when you select **Apply and remove N**. The review shows when removal affects other projects.
+
+Changed files receive private backups, listed under **Settings backups** after Apply. To undo a removal, copy the required entry from its backup into the current settings file. Sign-in caches remain. If a settings file changes after preview, preview again before applying.
+
+## How it works
+
+The router saves a separate Glide authorization for each customer. Linking a folder adds a `customer-glide` entry to `.mcp.json` and `.codex/config.toml`. Each client starts its own bridge process, which uses the customer's shared credential store and checks the saved folder binding and organization identity.
+
+By default, customer records, bindings, credentials, and logs live in `~/.mcp-customer-router/`. Settings backups stay beside the original files. The dashboard listens only on `127.0.0.1`; each client bridge can continue with the dashboard closed.
+
+**Check identity** reuses the saved authorization. **Reconnect Glide** starts a fresh authorization for that customer and invalidates its older router sessions. Open fresh client sessions after reconnecting. A separate folder or Git worktree needs its own binding.
+
+## Update or remove
 
 ```sh
 brew update
@@ -23,7 +70,7 @@ brew upgrade evanfurniss-dev/tap/mcp-customer-router
 mcp-customer-router service restart
 ```
 
-Start fresh Claude Code and Codex sessions to load the updated bridge. Homebrew installations save stable paths, so upgrades keep new project connections usable. Stop any active sign-in or check before restarting.
+Stop active sign-in or identity checks before restarting, then open fresh agent sessions. Homebrew connections use stable installation paths. When moving from a source install, install the Homebrew service and preview/apply each linked folder to update matching executable paths. The router refuses a change to a different customer or folder.
 
 To remove the application while keeping saved customer data:
 
@@ -32,90 +79,25 @@ mcp-customer-router service uninstall
 brew uninstall mcp-customer-router
 ```
 
-The package targets macOS. The service runs while the user is logged in and the Mac is awake. Homebrew's `brew services` command is not used; the router manages its own user service.
+## Scope and limits
 
-## Run from source
+- The current connector targets Glide's MCP endpoint, `https://mcp.glideapps.dev/mcp`.
+- Connections are separated within one macOS account. An agent with broad file access can read other credential directories. This is not a sandbox for untrusted tenants.
+- Execution stays on the Mac. Cloud hosting and scheduled agent runs are outside this release.
+- Credentials use private files. Removing a saved customer retains those files and does not revoke access at Glide.
+- Other client connections and provider overrides can still expose tools. Check the active MCP list in each client.
+- A timed-out or cancelled remote write may have completed. Read back its result before retrying.
 
-Requires Node.js 22.12 or newer and pnpm.
+See [verification evidence](docs/VERIFICATION.md) for tested paths and remaining checks. Intel Mac operation and a fresh user's complete sign-in flow still need separate validation.
 
-```sh
-pnpm install --frozen-lockfile
-pnpm --dir web install --frozen-lockfile
-pnpm build
-node dist/router-cli.js service install --open
-```
+## Development and support
 
-On macOS, this installs a user LaunchAgent and the command `~/.local/bin/mcp-customer-router`. The dashboard starts at login, stays available at `http://127.0.0.1:4773`, and restarts after an exit. You can close Terminal and the browser. Opening **Start Customer MCP Router.command** installs or starts the same service and opens the dashboard.
+Use `mcp-customer-router --help` for commands, or `mcp-customer-router service status` to inspect the local service.
 
-```sh
-mcp-customer-router open
-mcp-customer-router service status
-mcp-customer-router service restart
-```
+[Contributing and source setup](CONTRIBUTING.md) · [Report a bug](https://github.com/evanfurniss-dev/mcp-customer-router/issues/new/choose) · [Security policy](SECURITY.md) · [Changelog](CHANGELOG.md) · [Release process](docs/RELEASING.md)
 
-If `~/.local/bin` is not on your shell's PATH, use `~/.local/bin/mcp-customer-router open`. The service uses an absolute Node path and does not depend on your shell's PATH. Installation refuses an occupied port and leaves the existing process alone. Stop an older foreground dashboard before installing.
+## Attribution
 
-`service stop` stops the dashboard and disables startup at login until `service start`. `service uninstall` removes the LaunchAgent and CLI shortcut while preserving customer data. Logs are in `~/.mcp-customer-router/logs/`. Restarting the service stops active dashboard checks and sign-in jobs; it does not restart independent MCP bridges already owned by Claude or Codex.
+Built on [mcp-remote](https://github.com/punkpeye/mcp-remote), based on commit `71cadf3aaa935608d5e14d472a59e9583ebb9505`. The upstream bridge, copyright, and [MIT license](LICENSE) are retained. See the [upstream README](docs/UPSTREAM-README.md) and [UI source and license record](docs/UI-SOURCES.md).
 
-The service runs while your macOS user is logged in. Work pauses during sleep; it is not an always-on cloud host. For a foreground process, development, or another operating system, use `node dist/router-cli.js dashboard --open`.
-
-## Connect a customer
-
-1. Select **Add customer**. Enter its name and business label. Copy its organization ID from its Glide URL, such as the ID after `/o/` in `https://os.glideapps.dev/o/ORG_ID/projects`.
-2. Open the customer and select **Connect Glide**. If a browser does not open, select **Open Glide sign-in** in the active job. Finish Glide sign-in and choose that organization. The router reads `project_list` and checks its server-owned organization citation before showing **Verified**.
-3. Select **Choose folder** to pick the customer's local project in the macOS folder dialog, or enter its full path. Select **Preview config** to preview the generated Claude and Codex settings. Review any warnings about existing Glide connections, then select **Apply config**.
-4. Open a fresh Claude Code or Codex session in that project. Codex requires the project to be trusted. Claude may ask to approve the project's MCP entry. These are local project approvals; they do not repeat Glide sign-in. In T3, open that project and start a fresh provider session.
-
-**Connect Glide** and **Reconnect Glide** start a fresh authorization for only the selected customer. It invalidates older router sessions for that customer. **Check identity** reuses the saved grant and never opens a new sign-in. Refresh of an existing grant happens automatically.
-
-Homebrew project settings use stable installation paths. Source installations use absolute paths to the checkout and Node. If you move a source checkout or change installation methods, review and update those entries. Existing differing `customer-glide` entries are refused to prevent silent rebinding. A separate Git worktree needs its own binding; a copied entry still points at the original checkout and must be reviewed before reuse.
-
-## What it owns
-
-- A customer registry, organization expectations, and project bindings in `~/.mcp-customer-router/`.
-- Separate private credential directories and stable OAuth callback ports for each customer.
-- A `customer-glide` entry in `.mcp.json` and `.codex/config.toml` for each project you explicitly bind. Other settings are preserved. Existing files receive private backups.
-- One bridge process per active client. Claude and Codex read the same customer's saved credential store while keeping independent protocol connections.
-
-Configuration previews contain only the generated snippets. An active sign-in link stays in job memory until the job ends. Existing configuration content and OAuth credentials stay out of API responses. The local dashboard checks its host, browser origin, and session token. It binds only to `127.0.0.1`.
-
-The MVP supports `https://mcp.glideapps.dev/mcp`. Loopback HTTP servers exist for automated tests. It blocks tools if organization identity is absent or differs from the saved expectation. It also stops older sessions when a new customer sign-in begins. A timeout or cancellation does not prove that a remote write was rolled back; check the result before retrying it.
-
-## Limits
-
-This provides saved-connection separation under one operating-system account. An agent with broad file access under that account can reach other credential directories. Strong isolation between untrusted tenants needs a separate execution boundary.
-
-Existing global or project Glide connections can still be available to agents. The router reports detected entries for review and does not disable them automatically. T3's own provider override settings and organization policies can also affect effective configuration. Verify the active MCP list in each client.
-
-The dashboard service must be running to manage customers in the browser. Each client starts its own customer bridge, which can run with the dashboard stopped. Work runs on the Mac and stops when its execution process is unavailable. This release has no hosted execution or scheduler. Credentials use private files, not Mac Keychain. Removing a customer entry retains its protected credential files for recovery and does not revoke the grant at Glide; removal is blocked while projects remain bound.
-
-## Commands
-
-```sh
-node dist/router-cli.js --help
-mcp-customer-router --version
-mcp-customer-router list
-mcp-customer-router add --name "Customer" --business "Business" --org ORG_ID
-mcp-customer-router connect --customer CUSTOMER_UUID
-mcp-customer-router check --customer CUSTOMER_UUID
-node dist/router-cli.js dashboard --port 4774
-```
-
-Use `--home /absolute/path` for an isolated registry. A user can install one dashboard service; service commands must use its installed `--home` and `--port`. Keep data directories outside Git. The `serve` command is generated into client configuration and requires a matching saved project binding and project working directory.
-
-## Verification
-
-```sh
-pnpm lint
-pnpm knip
-pnpm test
-pnpm build
-```
-
-The router tests use temporary directories and a local OAuth/MCP fixture. They exercise shared refresh, concurrent clients, separate organizations at the same URL, organization mismatch, revoked access, generation changes, project config preservation, preview conflicts, rollback, and browser request protections. They do not authorize real Glide accounts or execute customer writes.
-
-Live Glide sign-in and provider behavior after that sign-in remain an acceptance step. Use two test organizations, connect each once, and open both Claude and Codex against each. Confirm the organization before allowing writes. See [VERIFICATION.md](docs/VERIFICATION.md) for results and the remaining boundary.
-
-[UI source and license record](docs/UI-SOURCES.md) · [Codex MCP configuration](https://developers.openai.com/codex/mcp) · [Claude Code MCP configuration](https://code.claude.com/docs/en/mcp)
-
-Maintainers: [packaging and release instructions](docs/RELEASING.md).
+This is an independent project. Glide and the named AI clients are trademarks of their respective owners; their names describe compatibility and do not imply endorsement.

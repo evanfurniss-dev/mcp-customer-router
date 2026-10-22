@@ -1,15 +1,20 @@
 {
   "name": "@evanfurniss-dev/mcp-customer-router",
-  "version": "0.1.0",
-  "description": "Local customer-bound Glide MCP connections shared by Claude Code and Codex",
+  "version": "0.2.0",
+  "description": "Share customer-specific Glide MCP connections across local AI coding apps",
   "keywords": [
     "mcp",
-    "stdio",
-    "sse",
-    "remote",
-    "oauth"
+    "glide",
+    "claude-code",
+    "codex",
+    "homebrew",
+    "oauth",
+    "macos"
   ],
-  "author": "Glen Maddern <glen@glenmaddern.com>",
+  "author": {
+    "name": "Evan Furniss",
+    "url": "https://github.com/evanfurniss-dev"
+  },
   "license": "MIT",
   "repository": "https://github.com/evanfurniss-dev/mcp-customer-router",
   "type": "module",
@@ -86,5 +91,12 @@
   "private": true,
   "engines": {
     "node": ">=22.12.0"
+  },
+  "contributors": [
+    "Glen Maddern and the mcp-remote contributors"
+  ],
+  "homepage": "https://github.com/evanfurniss-dev/mcp-customer-router#readme",
+  "bugs": {
+    "url": "https://github.com/evanfurniss-dev/mcp-customer-router/issues"
   }
 }

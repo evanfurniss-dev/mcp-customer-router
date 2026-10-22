@@ -1,0 +1,22 @@
+.connection-review { margin-block: 20px; }
+.connection-review h4 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.connection-review-intro, .connection-review-status, .connection-review-removal-note { color: var(--text-standard); font-size: 12px; line-height: 1.5; }
+.connection-review-intro { margin: 0 0 12px; }
+.connection-review-list { margin: 0; padding: 0; list-style: none; }
+.connection-review-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-block: 14px; border-top: 1px solid var(--border); }
+.connection-review-details { min-width: 0; }
+.connection-review-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.connection-review-title strong { color: var(--foreground); font-size: 13px; font-weight: 550; overflow-wrap: anywhere; }
+.connection-review-title > span { color: var(--muted-foreground); font-size: 12px; }
+.connection-review-path { margin: 4px 0; overflow-wrap: anywhere; color: var(--text-standard); }
+.connection-review-scope, .connection-review-reason { color: var(--text-standard); font-size: 12px; line-height: 1.5; margin: 4px 0 0; }
+.connection-review-options { display: flex; gap: 4px; flex-shrink: 0; }
+.connection-review-options [data-slot=button] { min-height: 40px; min-width: 68px; }
+.connection-review-options [data-slot=button][aria-pressed=true] { border-color: var(--foreground); background: var(--accent); }
+.connection-review-status { margin: 8px 0 0; color: var(--muted-foreground); }
+.connection-review-removal-note { margin: 10px 0 0; }
+@media (max-width: 720px) {
+  .connection-review-row { align-items: flex-start; flex-direction: column; gap: 10px; }
+  .connection-review-options { width: 100%; }
+  .connection-review-options [data-slot=button] { flex: 1; min-height: 44px; }
+}
