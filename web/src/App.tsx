@@ -246,7 +246,11 @@ function ProjectBinding({ customer, bindings, unavailable, refresh, announce }: 
   }
   async function preview(event: FormEvent) {
     event.preventDefault(); setBusy('preview'); setError(''); setApplied(''); setPlan(null); setAcknowledged(false); setConnectionActions([])
-    try { setPlan(await post<Plan>('/api/projects/preview', { customerId: customer.id, projectPath: path })) }
+    try {
+      const result = await post<Plan>('/api/projects/preview', { customerId: customer.id, projectPath: path })
+      setConnectionActions(result.connections.map(connection => ({ id: connection.id, action: 'ignore' })))
+      setPlan(result)
+    }
     catch (e) { setError(errorMessage(e)) } finally { setBusy(null) }
   }
   async function apply() {

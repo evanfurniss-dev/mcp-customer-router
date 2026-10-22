@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Preselect **Ignore** for each existing connection on every new configuration preview. Choose **Remove** explicitly to include a connection in removal when applying.
+
 ## 0.2.0
 
 - Added a first-visit walkthrough with example screens, remembered dismissal, and an information button to open it again.

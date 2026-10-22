@@ -1,6 +1,6 @@
 {
   "name": "@evanfurniss-dev/mcp-customer-router",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Share customer-specific Glide MCP connections across local AI coding apps",
   "keywords": [
     "mcp",

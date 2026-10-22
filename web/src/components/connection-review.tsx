@@ -26,7 +26,7 @@ export function ConnectionReview({ connections, actions, onChange, disabled = fa
 
   return <section className="connection-review" aria-labelledby={`${id}-heading`}>
     <h4 id={`${id}-heading`}>Other Glide connections</h4>
-    <p className="connection-review-intro">Choose Remove or Ignore for each saved connection. Ignore leaves its settings unchanged. Your choices take effect when you apply.</p>
+    <p className="connection-review-intro">Existing connections are kept by default. Select Remove for any connection you want to delete when you apply.</p>
     <ul className="connection-review-list">
       {connections.map((connection, index) => {
         const action = actions.find(item => item.id === connection.id)?.action
@@ -45,7 +45,7 @@ export function ConnectionReview({ connections, actions, onChange, disabled = fa
         </li>
       })}
     </ul>
-    <p className="connection-review-status" role="status">{undecided ? `Choose an option for ${undecided === 1 ? 'the remaining connection' : `the remaining ${undecided} connections`}.` : 'All connections reviewed.'}</p>
+    <p className="connection-review-status" role="status">{undecided ? `Choose an option for ${undecided === 1 ? 'the remaining connection' : `the remaining ${undecided} connections`}.` : removed.length ? `${removed.length} ${removed.length === 1 ? 'connection selected' : 'connections selected'} for removal.` : 'All existing connections will be kept.'}</p>
     {removed.length > 0 && <p className="connection-review-removal-note">Apply saves a backup before removing the selected entries. Saved sign-in files remain.{affectsOtherProjects && ' Removing user connections also affects other projects.'}</p>}
   </section>
 }

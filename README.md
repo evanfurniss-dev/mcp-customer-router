@@ -30,7 +30,7 @@ You can close the browser and Terminal. The Mac must stay awake for local agent 
 
 1. Select **New**. Enter a name, business label, and the organization ID from the customer's Glide URL, after `/o/`.
 2. Select **Connect Glide**, complete sign-in, and choose that organization. If the browser does not open, select **Open Glide sign-in**. Wait for **Organization verified**.
-3. Select **Choose folder**, then **Preview config**. Review any existing Glide connections and choose **Remove** or **Ignore** for each. Apply the configuration.
+3. Select **Choose folder**, then **Preview config**. Existing Glide connections start with **Ignore** selected. Choose **Remove** for any entries you want to remove, then apply the configuration.
 4. Open that folder in your AI client and start a fresh session. Accept any project trust or MCP approval prompts. Ask the agent to list projects through `customer-glide` and check the organization before making changes.
 
 The walkthrough opens on the first visit. The **ⓘ** button opens it again. **Client setup** provides instructions for each supported local client.
@@ -50,7 +50,7 @@ Claude app and Conductor guides are based on their documentation; live router tr
 
 ### Review existing connections
 
-**Preview config** detects other Glide entries in supported project and user settings. **Ignore** keeps an entry for this review. **Remove** takes effect only when you select **Apply and remove N**. The review shows when removal affects other projects.
+**Preview config** detects other Glide entries in supported project and user settings. Each new preview selects **Ignore** for every entry, which keeps it unchanged. Choose **Remove** explicitly to remove an entry when you select **Apply and remove N**. The review shows when removal affects other projects.
 
 Changed files receive private backups, listed under **Settings backups** after Apply. To undo a removal, copy the required entry from its backup into the current settings file. Sign-in caches remain. If a settings file changes after preview, preview again before applying.
 
