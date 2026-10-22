@@ -1,4 +1,20 @@
-# MVP verification
+# Verification
+
+## Release 0.2.0
+
+Checked on 2026-10-21, from release commit `8553e7e3d21dbcbc408188b88f89a22d7ce9ea3e`.
+
+- The full local suite passed 713 tests across 29 files. Formatting, lint, type checks, Knip, and bridge/dashboard builds passed. Local Node 26 required suppression of its `DEP0205` warning because inherited tests assert empty stderr.
+- [GitHub checks on Node 22 and 24](https://github.com/evanfurniss-dev/mcp-customer-router/actions/runs/39713582881) passed without that suppression. The [macOS release workflow](https://github.com/evanfurniss-dev/mcp-customer-router/actions/runs/39713716332) used Node 24 and the declared pnpm version, and passed all checks before publication.
+- The downloaded public archive passed its SHA-256 check and the package smoke test. That test verifies Remove/Ignore through the HTTP API, required choices, blocked unverified changes, private backups, preserved settings, and restart after removal of an older installation. It uses temporary settings and a synthetic identity.
+- Homebrew upgraded the existing installation from 0.1.0 to 0.2.0. The standard `brew test evanfurniss-dev/tap/mcp-customer-router` passed. The user service restarted and responded at its existing local address. The existing registry and saved authorization files had identical hashes before and after the upgrade.
+- The installed dashboard opened the client setup dialog and walkthrough in the real browser. Earlier isolated browser checks covered all tour steps, all six guide choices, remembered selection, keyboard navigation, light/dark themes, and narrow layouts. A mixed Remove/Ignore trial was checked by reading the resulting settings and private backups.
+
+The release checks made no new Glide sign-in or customer business-data writes. Claude desktop Code and Conductor have setup guides; live router trials for those clients remain open. A fresh user's complete sign-in, Intel Mac operation, overnight refresh, and 30-organization load trials also remain unverified. See [CLIENT-SETUP.md](CLIENT-SETUP.md) for client-specific scope.
+
+## Earlier MVP checks
+
+The sections below retain evidence from earlier builds. Their test counts, interface descriptions, and installation paths describe those builds at the stated dates.
 
 Verified on 2026-10-19. This fork starts at mcp-remote commit `71cadf3aaa935608d5e14d472a59e9583ebb9505`.
 
